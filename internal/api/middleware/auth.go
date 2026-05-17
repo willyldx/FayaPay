@@ -1,0 +1,153 @@
+package middleware
+
+import (
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
+	"github.com/fayapay/faya-backend/internal/services"
+)
+
+// Context local keys for sharing auth data between middleware and handlers.
+const (
+	LocalMerchantID = "merchant_id"
+	LocalMerchant   = "merchant"
+)
+
+// JWTAuth validates a Bearer JWT token from the Authorization header.
+// Used for merchant dashboard routes (register, login, API key management).
+func JWTAuth(jwtSecret string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Extract token from "Authorization: Bearer <token>".
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "missing Authorization header",
+				"code":  "AUTH_MISSING",
+			})
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid Authorization format, expected: Bearer <token>",
+				"code":  "AUTH_INVALID_FORMAT",
+			})
+		}
+
+		tokenString := parts[1]
+
+		// Parse and validate the token.
+		token, err := jwt.ParseWithClaims(tokenString, &services.JWTClaims{}, func(t *jwt.Token) (interface{}, error) {
+			// Ensure the signing method is HMAC.
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fiber.NewError(fiber.StatusUnauthorized, "unexpected signing method")
+			}
+			return []byte(jwtSecret), nil
+		})
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid or expired token",
+				"code":  "AUTH_TOKEN_INVALID",
+			})
+		}
+
+		claims, ok := token.Claims.(*services.JWTClaims)
+		if !ok || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid token claims",
+				"code":  "AUTH_CLAIMS_INVALID",
+			})
+		}
+
+		// Parse merchant ID from claims.
+		merchantID, err := uuid.Parse(claims.MerchantID)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid merchant_id in token",
+				"code":  "AUTH_MERCHANT_INVALID",
+			})
+		}
+
+		// Store in Fiber locals for downstream handlers.
+		c.Locals(LocalMerchantID, merchantID)
+
+		return c.Next()
+	}
+}
+
+// APIKeyAuth validates an API key from the X-API-Key header.
+// Hashes the key and looks up the merchant in the database.
+// Used for transaction and webhook endpoints (merchant-facing API).
+func APIKeyAuth(merchantSvc *services.MerchantService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		apiKey := c.Get("X-API-Key")
+		if apiKey == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "missing X-API-Key header",
+				"code":  "API_KEY_MISSING",
+			})
+		}
+
+		// Validate key format.
+		if !strings.HasPrefix(apiKey, "faya_live_") {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid API key format",
+				"code":  "API_KEY_INVALID_FORMAT",
+			})
+		}
+
+		// Authenticate: hash the key and look up the merchant.
+		merchant, err := merchantSvc.AuthenticateByAPIKey(c.Context(), apiKey)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid or revoked API key",
+				"code":  "API_KEY_UNAUTHORIZED",
+			})
+		}
+
+		// Store merchant ID and full merchant in locals.
+		c.Locals(LocalMerchantID, merchant.ID)
+		c.Locals(LocalMerchant, merchant)
+
+		return c.Next()
+	}
+}
+
+// GatewayTokenAuth validates the gateway authentication token.
+// Used for WebSocket upgrade and gateway admin endpoints.
+func GatewayTokenAuth(gatewaySecret string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := c.Get("X-Gateway-Token")
+		if token == "" {
+			token = c.Query("token") // Allow token in query for WebSocket upgrade.
+		}
+
+		if token == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "missing gateway token",
+				"code":  "GATEWAY_TOKEN_MISSING",
+			})
+		}
+
+		// For now, a simple shared secret comparison.
+		// Can be upgraded to JWT-based gateway tokens later.
+		if token != gatewaySecret {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid gateway token",
+				"code":  "GATEWAY_TOKEN_INVALID",
+			})
+		}
+
+		return c.Next()
+	}
+}
+
+// GetMerchantID extracts the authenticated merchant ID from Fiber locals.
+// Returns uuid.Nil and false if not found (middleware not applied).
+func GetMerchantID(c *fiber.Ctx) (uuid.UUID, bool) {
+	id, ok := c.Locals(LocalMerchantID).(uuid.UUID)
+	return id, ok
+}

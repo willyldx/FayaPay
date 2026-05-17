@@ -1,0 +1,28 @@
+# =============================================================================
+# FayaPay — Caddy Reverse Proxy Configuration
+# =============================================================================
+# Replace api.fayapay.com with your actual domain.
+# Caddy handles TLS certificates automatically via Let's Encrypt.
+
+api.fayapay.com {
+	# Proxy all traffic to the Go backend
+	reverse_proxy localhost:8080
+
+	# Enable gzip compression
+	encode gzip
+
+	# Security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Logging
+	log {
+		output file /var/log/caddy/fayapay-access.log
+		format json
+	}
+}

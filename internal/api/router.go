@@ -1,0 +1,132 @@
+package api
+
+import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
+	"github.com/fayapay/faya-backend/internal/api/handlers"
+	"github.com/fayapay/faya-backend/internal/api/middleware"
+	"github.com/fayapay/faya-backend/internal/config"
+	"github.com/fayapay/faya-backend/internal/gateway"
+	"github.com/fayapay/faya-backend/internal/services"
+)
+
+// Dependencies holds all shared dependencies injected into route handlers.
+type Dependencies struct {
+	DB          *pgxpool.Pool
+	Redis       *redis.Client
+	Hub         *gateway.Hub
+	AsynqClient *asynq.Client
+	Config      *config.Config
+	Logger      *zap.Logger
+}
+
+// SetupRouter mounts all API routes and middleware onto the Fiber app.
+func SetupRouter(app *fiber.App, deps *Dependencies) {
+	// =========================================================================
+	// Global middleware
+	// =========================================================================
+
+	// Panic recovery — prevent crashes from killing the server.
+	app.Use(recover.New())
+
+	// CORS — allow cross-origin requests from merchant frontends.
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Gateway-Token",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
+
+	// Structured request logging via Zap.
+	app.Use(middleware.RequestLogger(deps.Logger))
+
+	// =========================================================================
+	// Health & readiness — no auth required
+	// =========================================================================
+
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
+	app.Get("/ready", func(c *fiber.Ctx) error {
+		if err := deps.DB.Ping(c.Context()); err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"status": "not ready",
+				"error":  "database unreachable",
+				"code":   "DB_UNAVAILABLE",
+			})
+		}
+		if err := deps.Redis.Ping(c.Context()).Err(); err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"status": "not ready",
+				"error":  "redis unreachable",
+				"code":   "REDIS_UNAVAILABLE",
+			})
+		}
+		return c.JSON(fiber.Map{"status": "ready"})
+	})
+
+	// =========================================================================
+	// Initialize services
+	// =========================================================================
+
+	merchantSvc := services.NewMerchantService(deps.DB, deps.Config, deps.Logger)
+	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, deps.Logger)
+	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
+
+	// =========================================================================
+	// Initialize handlers
+	// =========================================================================
+
+	merchantHandler := handlers.NewMerchantHandler(merchantSvc, deps.Logger)
+	transactionHandler := handlers.NewTransactionHandler(transactionSvc, deps.Logger)
+	webhookHandler := handlers.NewWebhookHandler(webhookSvc, deps.Logger)
+	gatewayHandler := handlers.NewGatewayHandler(deps.Hub, deps.Logger)
+
+	// =========================================================================
+	// API v1 routes
+	// =========================================================================
+
+	v1 := app.Group("/v1")
+
+	// --- Auth routes (public: register & login, JWT-protected: API keys) ---
+	auth := v1.Group("/auth")
+	auth.Post("/register", merchantHandler.Register)
+	auth.Post("/login", merchantHandler.Login)
+
+	// JWT-protected auth routes.
+	authProtected := auth.Group("", middleware.JWTAuth(deps.Config.JWTSecret))
+	authProtected.Post("/api-keys", merchantHandler.GenerateAPIKey)
+	authProtected.Delete("/api-keys/:id", merchantHandler.RevokeAPIKey)
+	authProtected.Get("/me", merchantHandler.GetProfile)
+
+	// --- Transaction routes (API Key auth + rate limiting) ---
+	transactions := v1.Group("/transactions",
+		middleware.APIKeyAuth(merchantSvc),
+		middleware.RateLimit(deps.Redis, middleware.DefaultRateLimitConfig()),
+	)
+	transactions.Post("/", transactionHandler.Initiate)
+	transactions.Get("/:id", transactionHandler.GetByID)
+	transactions.Get("/", transactionHandler.List)
+
+	// --- Webhook routes (API Key auth) ---
+	webhooks := v1.Group("/webhooks",
+		middleware.APIKeyAuth(merchantSvc),
+	)
+	webhooks.Post("/", webhookHandler.Create)
+	webhooks.Get("/", webhookHandler.List)
+	webhooks.Delete("/:id", webhookHandler.Delete)
+	webhooks.Post("/:id/test", webhookHandler.Test)
+
+	// --- Gateway routes (gateway token auth) ---
+	gw := v1.Group("/gateway",
+		middleware.GatewayTokenAuth(deps.Config.GatewayTokenSecret),
+	)
+	gw.Get("/ws", gatewayHandler.UpgradeCheck, gatewayHandler.HandleWebSocket())
+	gw.Get("/status", gatewayHandler.Status)
+}
