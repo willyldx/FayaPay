@@ -12,6 +12,7 @@ export type {
   TransactionListParams,
   PaginatedTransactions,
   WebhookPayload,
+  WebhookEventData,
   WebhookEventType,
   VerifyWebhookParams,
 } from './types'

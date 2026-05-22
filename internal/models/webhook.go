@@ -64,4 +64,5 @@ const (
 	WebhookEventTransactionSuccess = "transaction.success"
 	WebhookEventTransactionFailed  = "transaction.failed"
 	WebhookEventTransactionTimeout = "transaction.timeout"
+	WebhookEventTransactionTest    = "transaction.test"
 )

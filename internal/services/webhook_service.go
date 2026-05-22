@@ -333,7 +333,7 @@ func (s *WebhookService) TestEndpoint(ctx context.Context, merchantID, endpointI
 
 	// Build a test event.
 	testEvent := models.WebhookEvent{
-		Event: "transaction.test",
+		Event: models.WebhookEventTransactionTest,
 		Data: models.WebhookEventData{
 			ID:          uuid.New(),
 			Reference:   "test_reference_001",

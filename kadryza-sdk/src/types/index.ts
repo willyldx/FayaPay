@@ -108,12 +108,33 @@ export type WebhookEventType =
   | 'transaction.success'
   | 'transaction.failed'
   | 'transaction.timeout'
+  | 'transaction.test'
+
+/** Subset of Transaction fields actually sent in webhook payloads by the backend */
+export interface WebhookEventData {
+  /** UUID of the transaction */
+  id: string
+  /** Your merchant reference */
+  reference: string
+  /** Amount in the smallest currency unit */
+  amount: number
+  /** Currency code */
+  currency: CurrencyType
+  /** Mobile money operator used */
+  operator: OperatorType
+  /** Payer's phone number */
+  phone_number: string
+  /** Current status of the transaction */
+  status: TransactionStatus
+  /** ISO 8601 timestamp — when the transaction was confirmed */
+  confirmed_at?: string
+}
 
 export interface WebhookPayload {
   /** The event type that triggered the webhook */
   event: WebhookEventType
   /** The transaction data associated with the event */
-  data: Transaction
+  data: WebhookEventData
   /** ISO 8601 timestamp of when the event occurred */
   timestamp: string
 }

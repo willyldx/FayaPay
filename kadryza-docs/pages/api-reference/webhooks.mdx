@@ -63,13 +63,14 @@ Le statut d'une transaction Mobile Money change de façon **asynchrone**. L'util
 
 ## Événements disponibles
 
-Kadryza émet 3 types d'événements webhook :
+Kadryza émet 3 types d'événements webhook de production, plus un événement de test :
 
 | Événement | Statut associé | Quand il est émis |
 |-----------|----------------|-------------------|
 | `transaction.success` | <StatusBadge status="SUCCESS" /> | Le payeur a confirmé le paiement sur son téléphone |
 | `transaction.failed` | <StatusBadge status="FAILED" /> | Le paiement a été refusé (solde insuffisant, annulation, erreur opérateur) |
 | `transaction.timeout` | <StatusBadge status="TIMEOUT" /> | Le payeur n'a pas répondu dans les 5 minutes |
+| `transaction.test` | <StatusBadge status="SUCCESS" /> | Envoyé manuellement depuis le dashboard pour vérifier la connectivité |
 
 <Callout type="info" emoji="ℹ️">
   Le statut `EXPIRED` (expiration côté passerelle) **n'émet pas de webhook**.
@@ -557,11 +558,128 @@ les requêtes entrantes, les headers et les payloads en temps réel.
 
 ---
 
+## Tester vos webhooks
+
+Avant de passer en production, vous pouvez vérifier que votre endpoint reçoit et traite
+correctement les webhooks grâce à l'événement `transaction.test`.
+
+### L'événement `transaction.test`
+
+Contrairement aux événements de production (`transaction.success`, `transaction.failed`, `transaction.timeout`),
+l'événement `transaction.test` est envoyé **à la demande** depuis le dashboard. Il contient un payload
+réaliste avec des données fictives, signé avec votre vrai secret de webhook.
+
+<Callout type="info" emoji="🧪">
+  L'événement `transaction.test` est identique en structure aux événements de production.
+  La seule différence est le champ `event` (`"transaction.test"`) et le header additionnel
+  `X-Kadryza-Test: true`.
+</Callout>
+
+### Payload complet
+
+```json filename="Payload — transaction.test"
+{
+  "event": "transaction.test",
+  "data": {
+    "id": "f8a1b2c3-d4e5-6789-abcd-ef0123456789",
+    "reference": "test_reference_001",
+    "amount": 1000,
+    "currency": "XAF",
+    "operator": "AIRTEL",
+    "phone_number": "+23566000000",
+    "status": "SUCCESS",
+    "confirmed_at": null
+  },
+  "timestamp": "2025-06-15T12:00:00Z"
+}
+```
+
+### Headers HTTP
+
+| Header | Valeur | Description |
+|--------|--------|-------------|
+| `Content-Type` | `application/json` | Format du payload |
+| `X-Kadryza-Signature` | `sha256=<hmac_hex>` | Signature HMAC-SHA256 (même algorithme qu'en production) |
+| `X-Kadryza-Test` | `true` | **Spécifique aux tests** — indique que c'est un webhook de test |
+| `User-Agent` | `Kadryza-Webhook/1.0` | Identifiant de l'expéditeur |
+
+### Déclencher un test depuis le dashboard
+
+1. Connectez-vous au [dashboard Kadryza](https://dashboard.kadryza.app)
+2. Accédez à **Webhooks**
+3. Repérez l'endpoint que vous voulez tester
+4. Cliquez sur le bouton **Tester** (icône de flèche)
+5. Le dashboard envoie immédiatement un `transaction.test` à votre URL
+6. Le résultat s'affiche : ✅ succès (HTTP 2xx reçu) ou ❌ échec (timeout, erreur HTTP)
+
+<Callout type="warning" emoji="⚠️">
+  Le test webhook n'est **pas** réessayé automatiquement. Si votre endpoint ne répond pas,
+  corrigez le problème et relancez le test manuellement.
+</Callout>
+
+### Gérer `transaction.test` dans votre code
+
+Votre handler webhook doit reconnaître l'événement `transaction.test` et le traiter
+sans effet de bord sur vos données de production :
+
+```javascript filename="Gestion de transaction.test"
+app.post('/webhooks/kadryza', handler, (req, res) => {
+  res.status(200).json({ received: true })
+
+  const event = JSON.parse(req.body.toString())
+
+  // Détecter les webhooks de test
+  if (event.event === 'transaction.test') {
+    console.log('🧪 Webhook de test reçu — connectivité OK')
+    // NE PAS mettre à jour votre base de données
+    // NE PAS envoyer d'emails ou de notifications
+    return
+  }
+
+  // Traiter les événements de production normalement
+  switch (event.event) {
+    case 'transaction.success':
+      // Marquer la commande comme payée
+      break
+    case 'transaction.failed':
+      // Notifier l'utilisateur
+      break
+    case 'transaction.timeout':
+      // Proposer de réessayer
+      break
+  }
+})
+```
+
+Avec le **SDK** :
+
+```typescript filename="Gestion avec @kadryza/sdk"
+import type { WebhookEventType } from '@kadryza/sdk'
+
+function handleWebhookEvent(eventType: WebhookEventType, data: any) {
+  switch (eventType) {
+    case 'transaction.test':
+      console.log('🧪 Test webhook reçu')
+      break
+    case 'transaction.success':
+      // Logique de production
+      break
+    case 'transaction.failed':
+    case 'transaction.timeout':
+      // Logique de production
+      break
+  }
+}
+```
+
+---
+
 ## Récapitulatif
 
 | Aspect | Détail |
 |--------|--------|
-| **Événements** | `transaction.success`, `transaction.failed`, `transaction.timeout` |
+| **Événements production** | `transaction.success`, `transaction.failed`, `transaction.timeout` |
+| **Événement test** | `transaction.test` (déclenché manuellement depuis le dashboard) |
 | **Méthode** | `POST` vers votre URL |
 | **Format** | JSON avec `event`, `data`, `timestamp` |
 | **Signature** | HMAC-SHA256 dans `X-Kadryza-Signature` |

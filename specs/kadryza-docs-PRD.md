@@ -1,18 +1,18 @@
-# PRD — faya-docs
+# PRD — kadryza-docs
 > Document de référence pour Cursor. Lire entièrement avant de générer du code.
-> Ce projet fait partie du monorepo `fayapay/faya-docs/`
+> Ce projet fait partie du monorepo `kadryza/kadryza-docs/`
 
 ---
 
 ## 1. Contexte du projet
 
-`faya-docs` est le site de documentation publique de FayaPay.
+`kadryza-docs` est le site de documentation publique de Kadryza.
 C'est ce que lisent les développeurs avant d'intégrer le SDK ou l'API.
 
-**Objectif :** Un développeur doit pouvoir intégrer FayaPay
+**Objectif :** Un développeur doit pouvoir intégrer Kadryza
 dans son projet en moins de 15 minutes après avoir lu la doc.
 
-**URL cible :** `docs.fayapay.app`
+**URL cible :** `docs.kadryza.app`
 
 ---
 
@@ -32,7 +32,7 @@ dans son projet en moins de 15 minutes après avoir lu la doc.
 ## 3. Structure des dossiers
 
 ```
-faya-docs/
+kadryza-docs/
 ├── pages/
 │   ├── index.mdx                        # Page d'accueil
 │   ├── _meta.json                       # Ordre navigation sidebar
@@ -73,7 +73,7 @@ faya-docs/
 ### 4.1 Page d'accueil (`index.mdx`)
 
 ```
-- Titre : "Documentation FayaPay"
+- Titre : "Documentation Kadryza"
 - Sous-titre : "L'infrastructure de paiement Mobile Money
   pour le Tchad et la zone CEMAC"
 - 3 cards de démarrage rapide :
@@ -91,18 +91,18 @@ faya-docs/
 
 ```
 Étape 1 — Créer un compte
-  → Lien vers dashboard.fayapay.app/register
+  → Lien vers dashboard.kadryza.app/register
 
 Étape 2 — Obtenir une clé API
   → Dashboard > API Keys > Créer une clé
 
 Étape 3 — Installer le SDK
-  npm install @fayapay/sdk
+  npm install @kadryza/sdk
 
 Étape 4 — Premier paiement (code complet)
-  import FayaPay from '@fayapay/sdk'
-  const faya = new FayaPay({ apiKey: 'faya_live_...' })
-  const transaction = await faya.transactions.initiate({...})
+  import Kadryza from '@kadryza/sdk'
+  const kadryza = new Kadryza({ apiKey: 'kadryza_live_...' })
+  const transaction = await kadryza.transactions.initiate({...})
 
 Étape 5 — Configurer un webhook
   → Guide webhook en lien
@@ -120,11 +120,11 @@ Note importante :
     → API Key (pour l'intégration merchant)
 
 - Format de la clé API :
-    faya_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-    (préfixe faya_live_ + 32 caractères aléatoires)
+    kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    (préfixe kadryza_live_ + 32 caractères aléatoires)
 
 - Comment utiliser la clé :
-    Header HTTP : Authorization: Bearer faya_live_xxx
+    Header HTTP : Authorization: Bearer kadryza_live_xxx
 
 - Sécurité :
     → Ne jamais exposer la clé côté client (browser)
@@ -132,7 +132,7 @@ Note importante :
     → La clé n'est affichée qu'une seule fois à la création
 
 - Exemple .env :
-    FAYAPAY_API_KEY=faya_live_xxxxxxxxxxxxxxxxxxxxxxxx
+    KADRYZAPAY_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 4.4 Référence API — Transactions (`api-reference/transactions.mdx`)
@@ -150,14 +150,14 @@ Paramètres :
 - description (string, optionnel) — Max 255 caractères
 
 Réponse 201 :
-- id — UUID de la transaction FayaPay
-- internal_ref — Référence interne FAYA-XXXXXXXX
+- id — UUID de la transaction Kadryza
+- internal_ref — Référence interne KADRYZA-XXXXXXXX
 - status — "PENDING"
 - expires_at — Expiration dans 5 minutes
 
 Idempotence :
 Si tu envoies deux fois la même reference,
-FayaPay retourne la transaction existante
+Kadryza retourne la transaction existante
 sans créer de doublon.
 ```
 
@@ -202,7 +202,7 @@ Query params :
   }
 
 - Vérification de signature :
-  Header X-Faya-Signature: sha256=<hmac_hex>
+  Header X-Kadryza-Signature: sha256=<hmac_hex>
   Toujours vérifier avant de traiter le webhook.
 
 - Retry policy :
@@ -254,12 +254,12 @@ Code HTTP | Code erreur          | Description | Solution
 503       | GATEWAY_UNAVAILABLE  | Gateway hors ligne | Réessayer dans quelques minutes
 
 Erreurs SDK :
-FayaPayAuthError
-FayaPayValidationError
-FayaPayNotFoundError
-FayaPayDuplicateError
-FayaPayNetworkError
-FayaPayGatewayUnavailableError
+KadryzaAuthError
+KadryzaValidationError
+KadryzaNotFoundError
+KadryzaDuplicateError
+KadryzaNetworkError
+KadryzaGatewayUnavailableError
 ```
 
 ---
@@ -274,10 +274,10 @@ FayaPayGatewayUnavailableError
 // Tab 3 : HTTP raw
 
 <RequestExample
-  curl={`curl -X POST https://api.fayapay.app/v1/transactions \\
-  -H "Authorization: Bearer faya_live_xxx" \\
+  curl={`curl -X POST https://api.kadryza.app/v1/transactions \\
+  -H "Authorization: Bearer kadryza_live_xxx" \\
   -d '{"reference":"order_123","amount":5000}'`}
-  sdk={`const tx = await faya.transactions.initiate({
+  sdk={`const tx = await kadryza.transactions.initiate({
   reference: 'order_123',
   amount: 5000
 })`}
@@ -306,18 +306,18 @@ FayaPayGatewayUnavailableError
 
 ```tsx
 export default {
-  logo: <span>⚡ FayaPay</span>,
-  project: { link: 'https://github.com/fayapay' },
-  docsRepositoryBase: 'https://github.com/fayapay/faya-docs',
-  footer: { text: '© 2024 FayaPay — Infrastructure de paiement CEMAC' },
-  primaryHue: 24,        // Orange FayaPay
+  logo: <span>⚡ Kadryza</span>,
+  project: { link: 'https://github.com/kadryza' },
+  docsRepositoryBase: 'https://github.com/kadryza/kadryza-docs',
+  footer: { text: '© 2024 Kadryza — Infrastructure de paiement CEMAC' },
+  primaryHue: 24,        // Orange Kadryza
   navigation: true,
   search: { placeholder: 'Rechercher dans la documentation...' },
   sidebar: { defaultMenuCollapseLevel: 1 },
   head: (
     <>
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta name="description" content="Documentation FayaPay — API de paiement Mobile Money pour le Tchad" />
+      <meta name="description" content="Documentation Kadryza — API de paiement Mobile Money pour le Tchad" />
     </>
   )
 }
@@ -328,8 +328,8 @@ export default {
 ## 7. Variables d'environnement
 
 ```env
-NEXT_PUBLIC_DASHBOARD_URL=https://dashboard.fayapay.app
-NEXT_PUBLIC_API_URL=https://api.fayapay.app
+NEXT_PUBLIC_DASHBOARD_URL=https://dashboard.kadryza.app
+NEXT_PUBLIC_API_URL=https://api.kadryza.app
 ```
 
 ---

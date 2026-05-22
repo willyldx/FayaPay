@@ -1,0 +1,30 @@
+# Android build
+*.apk
+*.aab
+*.dex
+*.class
+build/
+
+# Gradle
+.gradle/
+local.properties
+*.log
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Signing
+*.jks
+*.keystore
+
+# Generated
+gen/
+captures/
+.externalNativeBuild/
+.cxx/
