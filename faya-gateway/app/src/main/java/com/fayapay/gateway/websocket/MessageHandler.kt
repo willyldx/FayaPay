@@ -6,9 +6,11 @@ import com.fayapay.gateway.ussd.UssdSessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.Json
+import com.fayapay.gateway.core.LogSanitizer
 import timber.log.Timber
 
 /**
@@ -37,6 +39,8 @@ class MessageHandler(
      */
     var onPingReceived: (() -> Unit)? = null
 
+    private var listenerJob: Job? = null
+
     /**
      * Starts consuming messages from the WebSocket.
      * Call once after WebSocketClient is ready.
@@ -45,11 +49,22 @@ class MessageHandler(
      * individual message processing failures.
      */
     fun startListening() {
+        listenerJob?.cancel()
         Timber.i("MessageHandler — Listening for incoming messages")
 
-        webSocketClient.incomingMessages
+        listenerJob = webSocketClient.incomingMessages
             .onEach { message -> handleMessage(message) }
             .launchIn(scope)
+    }
+
+    /**
+     * Stops consuming messages. Call during shutdown to prevent
+     * accumulation of listener coroutines across start/stop cycles.
+     */
+    fun stopListening() {
+        listenerJob?.cancel()
+        listenerJob = null
+        Timber.d("MessageHandler — Stopped listening")
     }
 
     // ── Routing ────────────────────────────────────────────────────────────
@@ -72,8 +87,8 @@ class MessageHandler(
     private suspend fun handleInitiatePayment(message: IncomingMessage.InitiatePayment) {
         Timber.i(
             "MessageHandler — INITIATE_PAYMENT received: " +
-            "tx=${message.transactionId} amount=${message.amount} " +
-            "operator=${message.operator} phone=${message.phoneNumber}"
+            "tx=${message.transactionId} amount=${LogSanitizer.amount(message.amount)} " +
+            "operator=${message.operator} phone=${LogSanitizer.phone(message.phoneNumber)}"
         )
 
         // Step 1: ACK immediately

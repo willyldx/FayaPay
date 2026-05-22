@@ -3,11 +3,12 @@ package com.fayapay.gateway.sms
 import com.fayapay.gateway.core.DeviceInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import com.fayapay.gateway.core.LogSanitizer
 import timber.log.Timber
 
 /**
@@ -38,11 +39,14 @@ class SmsFilter(
      */
     var onOperatorSmsReceived: ((RawSms, OperatorOrigin) -> Unit)? = null
 
+    private var filterJob: Job? = null
+
     /**
      * Loads sender numbers from DataStore and starts listening for SMS.
      */
     fun startFiltering() {
-        scope.launch {
+        filterJob?.cancel()
+        filterJob = scope.launch {
             refreshSenderNumbers()
 
             SmsDispatcher.smsEvents
@@ -53,6 +57,15 @@ class SmsFilter(
                 "SmsFilter — Listening. Airtel senders=$airtelSenders, Moov senders=$moovSenders"
             )
         }
+    }
+
+    /**
+     * Stops the SMS filter. Call during shutdown.
+     */
+    fun stop() {
+        filterJob?.cancel()
+        filterJob = null
+        Timber.d("SmsFilter — Stopped")
     }
 
     /**
@@ -77,7 +90,7 @@ class SmsFilter(
                 // No sender numbers configured yet — log ALL SMS for Phase 0 field capture
                 Timber.w(
                     "SmsFilter — No operator numbers configured! " +
-                    "Logging SMS for field capture: sender=${rawSms.sender} body=${rawSms.body}"
+                    "Logging SMS for field capture: sender=${rawSms.sender} body=${LogSanitizer.smsBody(rawSms.body)}"
                 )
                 // Still emit as UNKNOWN so it can be logged/forwarded
                 OperatorOrigin.UNKNOWN

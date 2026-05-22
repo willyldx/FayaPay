@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -8,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/fayapay/faya-backend/internal/services"
+	"github.com/fayapay/faya-backend/pkg/crypto"
 )
 
 // Context local keys for sharing auth data between middleware and handlers.
@@ -91,8 +93,8 @@ func APIKeyAuth(merchantSvc *services.MerchantService) fiber.Handler {
 			})
 		}
 
-		// Validate key format.
-		if !strings.HasPrefix(apiKey, "faya_live_") {
+		// Validate key format — use the shared constant from pkg/crypto.
+		if !strings.HasPrefix(apiKey, crypto.APIKeyPrefix) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "invalid API key format",
 				"code":  "API_KEY_INVALID_FORMAT",
@@ -132,9 +134,9 @@ func GatewayTokenAuth(gatewaySecret string) fiber.Handler {
 			})
 		}
 
-		// For now, a simple shared secret comparison.
-		// Can be upgraded to JWT-based gateway tokens later.
-		if token != gatewaySecret {
+		// Constant-time comparison to prevent timing attacks.
+		// FIX H3: Direct string comparison leaked secret length via response time.
+		if subtle.ConstantTimeCompare([]byte(token), []byte(gatewaySecret)) != 1 {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "invalid gateway token",
 				"code":  "GATEWAY_TOKEN_INVALID",

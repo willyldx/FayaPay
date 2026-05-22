@@ -260,6 +260,35 @@ FAYAPAY_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
+## Compatibilité runtime
+
+| Runtime | Supporté | Notes |
+|---|---|---|
+| **Node.js 18+** | ✅ | Pleinement supporté |
+| **Node.js 20+** | ✅ | Pleinement supporté |
+| **Bun** | ✅ | Compatible (fetch natif) |
+| **Next.js (Node runtime)** | ✅ | Pleinement supporté |
+| **Next.js Edge Runtime** | ⚠️ | `verifyWebhookSignature` utilise `node:crypto` — non disponible en Edge. Utilisez le Node runtime pour vos routes webhook. |
+| **Cloudflare Workers** | ⚠️ | Même limitation que Edge Runtime pour la vérification de signature. |
+| **Deno** | ⚠️ | Compatible via le flag `--compat` pour `node:crypto`. |
+
+> ⚠️ **Next.js Edge Runtime** : Si tu utilises le Edge Runtime pour tes routes API, configure le webhook handler en **Node runtime** :
+> ```typescript
+> // app/api/webhooks/fayapay/route.ts
+> export const runtime = 'nodejs'  // ← Force Node runtime pour cette route
+> ```
+
+---
+
+## Sécurité
+
+- **L'API key n'est jamais exposée** dans les logs, `console.log`, ou `JSON.stringify` de l'instance SDK.
+- **Les signatures webhook** sont vérifiées en temps constant (`timingSafeEqual`) pour prévenir les timing attacks.
+- **`baseUrl` doit être HTTPS** en production — le SDK rejette les URLs HTTP non-localhost.
+- **Les numéros de téléphone** sont redactés dans les erreurs `FayaPayDuplicateError` pour éviter les fuites de PII dans les logs.
+
+---
+
 ## Support
 
 - 📧 Email : [support@fayapay.app](mailto:support@fayapay.app)

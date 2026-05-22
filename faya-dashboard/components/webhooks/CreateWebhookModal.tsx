@@ -92,13 +92,20 @@ export function CreateWebhookModal({ isOpen, onClose }: CreateWebhookModalProps)
 
   const handleClose = () => {
     if (step === 'reveal' && !confirmed) return
+    // [M-6 FIX] Effacer le secret de la mémoire immédiatement
+    setSecret('')
     onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-webhook-title"
+    >
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={step === 'create' ? onClose : undefined}

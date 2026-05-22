@@ -56,6 +56,8 @@ export function CreateApiKeyModal({ isOpen, onClose }: CreateApiKeyModalProps) {
   }, [isOpen])
 
   const handleCreate = async () => {
+    // [M-4 FIX] Guard contre le double-click
+    if (createMutation.isPending) return
     try {
       const result = await createMutation.mutateAsync(label || undefined)
       if (result.full_key) {
@@ -76,13 +78,20 @@ export function CreateApiKeyModal({ isOpen, onClose }: CreateApiKeyModalProps) {
   const handleClose = () => {
     // Sur l'étape reveal, bloquer si pas confirmé
     if (step === 'reveal' && !confirmed) return
+    // [M-6 FIX] Effacer le secret de la mémoire immédiatement
+    setFullKey('')
     onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-apikey-title"
+    >
       {/* Overlay — ne ferme PAS sur click si on est sur reveal sans confirmation */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"

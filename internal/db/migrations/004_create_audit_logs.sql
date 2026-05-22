@@ -11,8 +11,8 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    transaction_id UUID REFERENCES transactions(id),
-    merchant_id    UUID REFERENCES merchants(id),
+    transaction_id UUID REFERENCES transactions(id) ON DELETE RESTRICT,
+    merchant_id    UUID REFERENCES merchants(id) ON DELETE RESTRICT,
     event_type     VARCHAR(100) NOT NULL,  -- e.g. TRANSACTION_INITIATED, SMS_RECEIVED, STATUS_CHANGED
     payload        JSONB,                  -- Raw event data for forensic analysis
     created_at     TIMESTAMPTZ DEFAULT NOW()

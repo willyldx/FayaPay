@@ -83,6 +83,20 @@ export function formatDateRelative(isoDate: string): string {
   const now = Date.now()
   const date = new Date(isoDate).getTime()
   const diffMs = now - date
+
+  // [L-4 FIX] Gérer les dates futures (ex: expires_at)
+  if (diffMs < 0) {
+    const futMs = -diffMs
+    const futMin = Math.floor(futMs / 60_000)
+    const futH = Math.floor(futMs / 3_600_000)
+    const futD = Math.floor(futMs / 86_400_000)
+    if (futMin < 1) return 'dans quelques secondes'
+    if (futMin < 60) return `dans ${futMin} min`
+    if (futH < 24) return `dans ${futH}h`
+    if (futD < 30) return `dans ${futD}j`
+    return formatDateShort(isoDate)
+  }
+
   const diffMin = Math.floor(diffMs / 60_000)
   const diffH = Math.floor(diffMs / 3_600_000)
   const diffD = Math.floor(diffMs / 86_400_000)

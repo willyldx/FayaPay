@@ -3,10 +3,9 @@
 import {
   useQuery,
   useMutation,
-  useQueryClient,
   keepPreviousData,
 } from '@tanstack/react-query'
-import type { TransactionFilters, Transaction, PaginatedResponse } from '@/lib/types'
+import type { TransactionFilters, Transaction } from '@/lib/types'
 import {
   getTransactions,
   getTransaction,
@@ -47,12 +46,13 @@ export function useTransactions(filters: TransactionFilters = {}) {
 
 /**
  * Détail d'une transaction par ID.
+ * @param enabled - Contrôle si la query doit s'exécuter (ex: drawer ouvert)
  */
-export function useTransaction(id: string) {
+export function useTransaction(id: string, enabled = true) {
   return useQuery({
     queryKey: transactionKeys.detail(id),
     queryFn: () => getTransaction(id),
-    enabled: !!id,
+    enabled: !!id && enabled, // [M-2 FIX] Ne pas fetch si le drawer est fermé
   })
 }
 
@@ -61,27 +61,16 @@ export function useTransaction(id: string) {
  * Utilise les données déjà en cache si disponibles.
  */
 export function useExportTransactions() {
-  const queryClient = useQueryClient()
-
   return useMutation({
     mutationFn: async (filters: TransactionFilters) => {
-      // Tenter de récupérer les données du cache TanStack Query
-      const cached = queryClient.getQueryData<PaginatedResponse<Transaction>>(
-        transactionKeys.list(filters)
-      )
-
-      let transactions: Transaction[]
-
-      if (cached) {
-        transactions = cached.data
-      } else {
-        // Si pas en cache, fetch depuis l'API
-        const response = await getTransactions({
-          ...filters,
-          per_page: 1000, // Max pour l'export
-        })
-        transactions = response.data
-      }
+      // [M-1 FIX] Toujours fetch toutes les transactions pour l'export
+      // au lieu d'utiliser le cache paginé (qui ne contient qu'une page)
+      const response = await getTransactions({
+        ...filters,
+        page: 1,
+        per_page: 1000, // Max pour l'export
+      })
+      const transactions = response.data
 
       const csv = generateClientCsv(transactions)
       const date = new Date().toISOString().slice(0, 10)

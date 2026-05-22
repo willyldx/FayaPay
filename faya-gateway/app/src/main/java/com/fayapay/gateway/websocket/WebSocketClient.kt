@@ -112,7 +112,7 @@ class WebSocketClient(
     fun send(message: OutgoingMessage): Boolean {
         val ws = webSocket
         if (ws == null) {
-            Timber.w("WebSocketClient — Cannot send, not connected: $message")
+            Timber.w("WebSocketClient — Cannot send, not connected: ${message::class.simpleName}")
             return false
         }
 
@@ -120,9 +120,9 @@ class WebSocketClient(
             val payload = json.encodeToString(message)
             val sent = ws.send(payload)
             if (sent) {
-                Timber.d("WebSocketClient — Sent: $payload")
+                Timber.d("WebSocketClient — Sent: ${message::class.simpleName} (${payload.length} bytes)")
             } else {
-                Timber.w("WebSocketClient — Send failed (queue full): $payload")
+                Timber.w("WebSocketClient — Send failed (queue full): ${message::class.simpleName}")
             }
             sent
         } catch (e: Exception) {
@@ -136,6 +136,10 @@ class WebSocketClient(
     // ── Connection logic ───────────────────────────────────────────────────
 
     private suspend fun performConnect() {
+        // H3 fix: Cancel any existing WebSocket to prevent dual-connect
+        webSocket?.cancel()
+        webSocket = null
+
         _connectionState.value = ConnectionState.CONNECTING
 
         val backendUrl = deviceInfo.getBackendUrl()
@@ -168,16 +172,16 @@ class WebSocketClient(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            Timber.d("WebSocketClient — Received: $text")
+            Timber.d("WebSocketClient — Received message (${text.length} bytes)")
             try {
                 val message = json.decodeFromString<IncomingMessage>(text)
                 // Emit to flow — non-blocking, will buffer if consumers are slow
                 val emitted = _incomingMessages.tryEmit(message)
                 if (!emitted) {
-                    Timber.w("WebSocketClient — Message buffer full, dropped: $text")
+                    Timber.w("WebSocketClient — Message buffer full, dropped message")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "WebSocketClient — Failed to parse incoming message: $text")
+                Timber.e(e, "WebSocketClient — Failed to parse incoming message (${text.length} bytes)")
             }
         }
 

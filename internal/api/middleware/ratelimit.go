@@ -71,25 +71,15 @@ func RateLimit(rdb *redis.Client, cfg RateLimitConfig) fiber.Handler {
 }
 
 // rateLimitKey determines the rate limit key from the request context.
-// Prefers API key (hashed), falls back to client IP.
+// FIX M5: Uses the authenticated merchant_id from Fiber locals (set by
+// APIKeyAuth middleware) instead of the raw X-API-Key header, which could
+// be spoofed by an attacker to get a separate rate limit bucket.
 func rateLimitKey(c *fiber.Ctx) string {
-	// If API key auth middleware ran, use the API key as the key.
-	if apiKey := c.Get("X-API-Key"); apiKey != "" {
-		// Use a truncated version — we don't need the full key for rate limiting.
-		if len(apiKey) > 20 {
-			return "key:" + apiKey[:20]
-		}
-		return "key:" + apiKey
+	// If API key auth middleware ran, merchant_id will be in locals.
+	if id, ok := GetMerchantID(c); ok {
+		return "merchant:" + id.String()
 	}
 
-	// Fallback to client IP.
+	// Fallback to client IP (for public routes like /auth/login).
 	return "ip:" + c.IP()
-}
-
-// max returns the larger of two int64 values.
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }

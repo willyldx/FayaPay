@@ -51,6 +51,16 @@ func (h *GatewayHandler) HandleWebSocket() fiber.Handler {
 			return
 		}
 
+		// FIX L4: Validate gateway_id format to prevent ID injection.
+		// Reject IDs that are too long or contain non-alphanumeric characters.
+		if len(gatewayID) > 64 || !isValidGatewayID(gatewayID) {
+			h.logger.Warn("gateway connection rejected — invalid gateway_id format",
+				zap.String("gateway_id", gatewayID),
+			)
+			c.Close()
+			return
+		}
+
 		// Parse operators from comma-separated string.
 		operators := parseOperators(operatorsStr)
 		if len(operators) == 0 {
@@ -140,4 +150,16 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// isValidGatewayID checks that the gateway ID contains only safe characters.
+// Allowed: a-z, A-Z, 0-9, dash, underscore.
+func isValidGatewayID(id string) bool {
+	for _, ch := range id {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return false
+		}
+	}
+	return true
 }

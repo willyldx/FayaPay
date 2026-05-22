@@ -15,6 +15,10 @@ var (
 	ErrSendChannelFull = errors.New("gateway send channel is full")
 )
 
+// FIX L6: Maximum number of concurrent gateway connections.
+// Prevents resource exhaustion if an attacker opens many connections.
+const maxGatewayClients = 50
+
 // ClientMessage wraps an incoming message with the client that sent it.
 type ClientMessage struct {
 	Client  *Client
@@ -167,6 +171,19 @@ func (h *Hub) GetConnectedGateways() []GatewayStatus {
 // =============================================================================
 
 func (h *Hub) handleRegister(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// FIX L6: Reject if at capacity (existing reconnect is allowed).
+	if _, isReconnect := h.clients[client.GatewayID]; !isReconnect && len(h.clients) >= maxGatewayClients {
+		h.logger.Warn("max gateway clients reached — rejecting connection",
+			zap.String("gateway_id", client.GatewayID),
+			zap.Int("current", len(h.clients)),
+		)
+		close(client.send)
+		return
+	}
+
 	// Check if this gateway ID is already connected.
 	if existing, ok := h.clients[client.GatewayID]; ok {
 		h.logger.Warn("gateway reconnecting — disconnecting old connection",
@@ -192,9 +209,7 @@ func (h *Hub) handleRegister(client *Client) {
 			delete(h.clients, existing.GatewayID)
 		}
 
-		h.mu.Lock()
 		h.operatorClients[op] = client
-		h.mu.Unlock()
 	}
 
 	h.logger.Info("gateway registered",
@@ -205,18 +220,19 @@ func (h *Hub) handleRegister(client *Client) {
 }
 
 func (h *Hub) handleUnregister(client *Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if _, ok := h.clients[client.GatewayID]; !ok {
 		return // Already removed.
 	}
 
 	// Remove from operator map.
-	h.mu.Lock()
 	for _, op := range client.Operators {
 		if current, ok := h.operatorClients[op]; ok && current.GatewayID == client.GatewayID {
 			delete(h.operatorClients, op)
 		}
 	}
-	h.mu.Unlock()
 
 	// Close send channel and remove.
 	close(client.send)

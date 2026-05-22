@@ -184,12 +184,17 @@ func (s *WebhookService) DispatchEvent(
 
 		task := asynq.NewTask(workers.TypeWebhookDeliver, payload)
 
+		// FIX M1: TaskID prevents duplicate webhooks if DispatchEvent
+		// is called twice for the same endpoint+transaction (race).
+		taskID := fmt.Sprintf("wh:%s:%s", ep.ID, txn.ID)
+
 		// PRD rule #3: retry with exponential backoff — 1min, 5min, 30min, 2h.
 		// Max 4 attempts total.
 		_, err := s.asynqClient.Enqueue(task,
 			asynq.Queue("webhooks"),
 			asynq.MaxRetry(4),
 			asynq.Retention(24*time.Hour),
+			asynq.TaskID(taskID),
 		)
 		if err != nil {
 			s.logger.Error("failed to enqueue webhook delivery",

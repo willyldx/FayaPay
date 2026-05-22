@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -35,11 +37,17 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	// Panic recovery — prevent crashes from killing the server.
 	app.Use(recover.New())
 
-	// CORS — allow cross-origin requests from merchant frontends.
+	// CORS — restrict to known origins. Configurable via CORS_ORIGINS env var.
+	// FIX H2: Wildcard was dangerous for JWT-protected dashboard routes.
+	allowedOrigins := "http://localhost:3000,http://localhost:5173"
+	if deps.Config.CORSOrigins != "" {
+		allowedOrigins = deps.Config.CORSOrigins
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Gateway-Token",
-		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		AllowOrigins:     allowedOrigins,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Gateway-Token",
+		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowCredentials: true,
 	}))
 
 	// Structured request logging via Zap.
@@ -95,9 +103,14 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	v1 := app.Group("/v1")
 
 	// --- Auth routes (public: register & login, JWT-protected: API keys) ---
+	// FIX H4: Aggressive rate limiting on auth (5 req/min) to prevent brute-force.
+	authLimiter := middleware.RateLimit(deps.Redis, middleware.RateLimitConfig{
+		MaxRequests: 5,
+		Window:      1 * time.Minute,
+	})
 	auth := v1.Group("/auth")
-	auth.Post("/register", merchantHandler.Register)
-	auth.Post("/login", merchantHandler.Login)
+	auth.Post("/register", authLimiter, merchantHandler.Register)
+	auth.Post("/login", authLimiter, merchantHandler.Login)
 
 	// JWT-protected auth routes.
 	authProtected := auth.Group("", middleware.JWTAuth(deps.Config.JWTSecret))
@@ -111,8 +124,10 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 		middleware.RateLimit(deps.Redis, middleware.DefaultRateLimitConfig()),
 	)
 	transactions.Post("/", transactionHandler.Initiate)
-	transactions.Get("/:id", transactionHandler.GetByID)
+	// FIX H5: List MUST be registered before /:id — otherwise Fiber matches
+	// GET /v1/transactions/ as /:id with id="", returning 400 instead of the list.
 	transactions.Get("/", transactionHandler.List)
+	transactions.Get("/:id", transactionHandler.GetByID)
 
 	// --- Webhook routes (API Key auth) ---
 	webhooks := v1.Group("/webhooks",

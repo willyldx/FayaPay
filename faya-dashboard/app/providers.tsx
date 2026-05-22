@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
+import { setQueryClientRef } from '@/lib/stores/authStore'
 
 // =============================================================================
 // Providers — Client Components wrapper
@@ -11,8 +12,8 @@ import { Toaster } from 'sonner'
 export function Providers({ children }: { children: React.ReactNode }) {
   // QueryClient créé une seule fois par instance (pas recréé à chaque render)
   const [queryClient] = useState(
-    () =>
-      new QueryClient({
+    () => {
+      const client = new QueryClient({
         defaultOptions: {
           queries: {
             // Retry 1 fois sur erreur réseau, pas sur 4xx
@@ -35,6 +36,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
         },
       })
+      // [H-3] Lier le QueryClient au store auth pour clear au logout
+      setQueryClientRef(client)
+      return client
+    }
   )
 
   return (

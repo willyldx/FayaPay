@@ -56,7 +56,12 @@ func NewClient(hub *Hub, conn *websocket.Conn, gatewayID string, operators []str
 // Runs in its own goroutine. The connection is closed when this returns.
 func (c *Client) ReadPump() {
 	defer func() {
-		c.hub.unregister <- c
+		// FIX L7: Timeout prevents goroutine leak if Hub.Run() already exited.
+		select {
+		case c.hub.unregister <- c:
+		case <-time.After(5 * time.Second):
+			c.logger.Warn("timeout sending unregister — Hub may have stopped")
+		}
 		c.conn.Close()
 	}()
 

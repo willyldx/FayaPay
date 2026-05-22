@@ -42,10 +42,10 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS transactions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    merchant_id     UUID NOT NULL REFERENCES merchants(id),
+    merchant_id     UUID NOT NULL REFERENCES merchants(id) ON DELETE RESTRICT,
     reference       VARCHAR(100) UNIQUE NOT NULL,   -- Merchant-provided reference (idempotency key)
     internal_ref    VARCHAR(100) UNIQUE NOT NULL,   -- Internal Faya reference (e.g. FAYA-20240115-XXXX)
-    amount          BIGINT NOT NULL,                -- Amount in integer centimes XAF — NEVER float
+    amount          BIGINT NOT NULL CHECK (amount > 0), -- PRD rule #7: integer centimes, always positive
     currency        currency_type DEFAULT 'XAF',
     operator        operator_type NOT NULL,
     phone_number    VARCHAR(20) NOT NULL,            -- Payer's phone number
@@ -74,8 +74,28 @@ CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_id
 -- Fast filtering by status (e.g. dashboard, worker queries).
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 
--- Partial index for the timeout worker: only scan PENDING transactions.
+-- Partial index for the timeout worker: scan PENDING + PROCESSING transactions.
+-- FIX M9: Was only covering PENDING — PROCESSING transactions weren't indexed.
 CREATE INDEX IF NOT EXISTS idx_transactions_expires ON transactions(expires_at)
-    WHERE status = 'PENDING';
+    WHERE status IN ('PENDING', 'PROCESSING');
+
+-- FIX M11: Automatic updated_at trigger — prevents stale timestamps
+-- if any query forgets to set updated_at = NOW() manually.
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER transactions_updated_at
+    BEFORE UPDATE ON transactions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Apply the same trigger to merchants (created in 001).
+CREATE TRIGGER merchants_updated_at
+    BEFORE UPDATE ON merchants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 COMMIT;

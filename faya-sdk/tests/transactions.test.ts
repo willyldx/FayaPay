@@ -4,6 +4,7 @@ import {
   FayaPayDuplicateError,
   FayaPayGatewayUnavailableError,
   FayaPayNotFoundError,
+  FayaPayValidationError,
 } from '../src/errors'
 import type { RequestFn } from '../src/client'
 import type { Transaction, PaginatedTransactions } from '../src/types'
@@ -74,8 +75,11 @@ describe('Transactions resource', () => {
         await transactions.initiate(params)
       } catch (error) {
         expect(error).toBeInstanceOf(FayaPayDuplicateError)
-        expect((error as FayaPayDuplicateError).existingTransaction).toEqual(existing)
-        expect((error as FayaPayDuplicateError).code).toBe('DUPLICATE_REFERENCE')
+        const dup = error as FayaPayDuplicateError
+        expect(dup.code).toBe('DUPLICATE_REFERENCE')
+        // [M3] phone_number is redacted in existingTransaction
+        expect(dup.existingTransaction?.phone_number).toContain('****')
+        expect(dup.existingTransaction?.id).toBe(existing.id)
       }
     })
 
@@ -87,6 +91,43 @@ describe('Transactions resource', () => {
       await expect(transactions.initiate(params)).rejects.toThrow(
         FayaPayGatewayUnavailableError
       )
+    })
+
+    // ─── [M4] Amount validation ──────────────────────────────────
+
+    it('[M4] throws FayaPayValidationError for negative amount', async () => {
+      await expect(
+        transactions.initiate({ ...params, amount: -5000 })
+      ).rejects.toThrow(FayaPayValidationError)
+    })
+
+    it('[M4] throws FayaPayValidationError for decimal amount', async () => {
+      await expect(
+        transactions.initiate({ ...params, amount: 50.5 })
+      ).rejects.toThrow(FayaPayValidationError)
+    })
+
+    it('[M4] throws FayaPayValidationError for zero amount', async () => {
+      await expect(
+        transactions.initiate({ ...params, amount: 0 })
+      ).rejects.toThrow(FayaPayValidationError)
+    })
+
+    it('[M4] throws FayaPayValidationError for NaN amount', async () => {
+      await expect(
+        transactions.initiate({ ...params, amount: NaN })
+      ).rejects.toThrow(FayaPayValidationError)
+    })
+
+    it('[M4] throws FayaPayValidationError for Infinity amount', async () => {
+      await expect(
+        transactions.initiate({ ...params, amount: Infinity })
+      ).rejects.toThrow(FayaPayValidationError)
+    })
+
+    it('[M4] does NOT reject valid positive integer amount', async () => {
+      mockRequest.mockResolvedValue(mockTransaction())
+      await expect(transactions.initiate({ ...params, amount: 1 })).resolves.toBeDefined()
     })
   })
 

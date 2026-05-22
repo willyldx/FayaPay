@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.fayapay.gateway.core.LogSanitizer
 import timber.log.Timber
 
 /**
@@ -105,13 +106,13 @@ class SmsParser {
             if (result != null) {
                 Timber.i(
                     "SmsParser — Matched pattern '${compiled.name}': " +
-                    "amount=${result.amount} phone=${result.senderPhone} ref=${result.reference}"
+                    "amount=${LogSanitizer.amount(result.amount)} phone=${LogSanitizer.phone(result.senderPhone)} ref=${LogSanitizer.reference(result.reference)}"
                 )
                 return result
             }
         }
 
-        Timber.w("SmsParser — No pattern matched for operator=$operator body=$body")
+        Timber.w("SmsParser — No pattern matched for operator=$operator body=${LogSanitizer.smsBody(body)}")
         return ParsedSms(
             success = false,
             amount = null,

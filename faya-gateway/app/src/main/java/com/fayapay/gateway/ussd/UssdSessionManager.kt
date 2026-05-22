@@ -1,6 +1,11 @@
 package com.fayapay.gateway.ussd
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
@@ -24,19 +29,19 @@ class UssdSessionManager {
 
     companion object {
         const val USSD_TIMEOUT_MS = 30_000L
+        /** Auto-cleanup pending SMS after 2 minutes if no SMS arrives */
+        const val SMS_CONFIRMATION_TIMEOUT_MS = 120_000L
     }
 
-    /**
-     * Mutex ensuring only one USSD session executes at a time.
-     * USSD is inherently serial — the phone can only handle one session.
-     */
     private val sessionMutex = Mutex()
+    private val pendingSmsConfirmations = ConcurrentHashMap<String, CompletableDeferred<SmsConfirmation>>()
+    private val cleanupScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     /**
-     * Active sessions waiting for SMS confirmation.
-     * Key: transaction_id, Value: deferred that completes when SMS arrives.
+     * Callback invoked when a pending SMS times out.
+     * Set by GatewayManager to send OPERATION_FAILED to the backend.
      */
-    private val pendingSmsConfirmations = ConcurrentHashMap<String, CompletableDeferred<SmsConfirmation>>()
+    var onSmsTimeout: ((transactionId: String) -> Unit)? = null
 
     /**
      * Reference to UssdExecutor, injected post-construction.
@@ -139,6 +144,19 @@ class UssdSessionManager {
         val deferred = CompletableDeferred<SmsConfirmation>()
         pendingSmsConfirmations[transactionId] = deferred
         Timber.d("UssdSessionManager — Registered pending SMS for tx=$transactionId")
+
+        // Auto-cleanup after timeout to prevent memory leaks
+        cleanupScope.launch {
+            delay(SMS_CONFIRMATION_TIMEOUT_MS)
+            if (pendingSmsConfirmations.remove(transactionId) != null) {
+                deferred.cancel()
+                Timber.e(
+                    "UssdSessionManager — SMS confirmation TIMEOUT for tx=$transactionId " +
+                    "(no SMS received within ${SMS_CONFIRMATION_TIMEOUT_MS / 1000}s)"
+                )
+                onSmsTimeout?.invoke(transactionId)
+            }
+        }
     }
 
     /**

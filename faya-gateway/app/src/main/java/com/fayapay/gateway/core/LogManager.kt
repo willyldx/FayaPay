@@ -3,9 +3,6 @@ package com.fayapay.gateway.core
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Application-wide log manager that emits log entries as a SharedFlow.
@@ -29,10 +26,11 @@ object LogManager {
      */
     private const val MAX_ENTRIES = 500
 
-    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    // L1 fix: DateTimeFormatter is thread-safe, unlike SimpleDateFormat
+    private val timeFormat = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
 
     private val _logs = MutableSharedFlow<LogEntry>(
-        replay = MAX_ENTRIES,         // New collectors get all recent logs
+        replay = 0,                   // M6 fix: No replay — use logHistory for initial load
         extraBufferCapacity = 64
     )
     val logs: SharedFlow<LogEntry> = _logs.asSharedFlow()
@@ -45,7 +43,7 @@ object LogManager {
 
     fun log(level: LogLevel, message: String) {
         val entry = LogEntry(
-            time = timeFormat.format(Date()),
+            time = java.time.LocalTime.now().format(timeFormat),
             timestamp = System.currentTimeMillis(),
             level = level,
             message = message

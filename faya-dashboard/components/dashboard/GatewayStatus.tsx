@@ -29,6 +29,7 @@ export function GatewayStatus() {
     queryKey: ['gateway', 'status'],
     queryFn: fetchGatewayStatus,
     refetchInterval: 30_000, // 30s — temps réel
+    refetchIntervalInBackground: false, // [M-3 FIX] Stop polling en onglet inactif
     staleTime: 15_000,
   })
 

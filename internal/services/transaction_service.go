@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
+	crypto_rand "crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -160,7 +161,12 @@ func (s *TransactionService) Initiate(
 	// --- Dispatch to gateway via WebSocket Hub ---
 	// This is async — if no gateway is available, the transaction stays PENDING
 	// and will eventually timeout via the timeout worker.
-	go s.dispatchToGateway(txn)
+	// FIX M6: Add context timeout to prevent goroutine leak if Hub blocks.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.dispatchToGateway(ctx, txn)
+	}()
 
 	s.logger.Info("transaction initiated",
 		zap.String("transaction_id", txn.ID.String()),
@@ -245,8 +251,8 @@ func (s *TransactionService) List(ctx context.Context, req models.TransactionLis
 // =============================================================================
 
 // UpdateStatus transitions a transaction to a new status.
-// Validates that the transition is legal and creates an audit log entry.
-// If the new status is terminal (SUCCESS/FAILED/TIMEOUT), enqueues webhook dispatch.
+// Uses SQL-level atomic guard (WHERE status NOT IN final states) to prevent
+// TOCTOU race conditions between the gateway SMS handler and timeout worker.
 func (s *TransactionService) UpdateStatus(
 	ctx context.Context,
 	txID uuid.UUID,
@@ -254,7 +260,7 @@ func (s *TransactionService) UpdateStatus(
 	reason *string,
 ) (*models.Transaction, error) {
 
-	// Fetch current transaction.
+	// Fetch current transaction — for validation + audit log "from" field.
 	txn, err := s.queries.GetTransactionByID(ctx, txID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -265,12 +271,12 @@ func (s *TransactionService) UpdateStatus(
 
 	currentStatus := models.TransactionStatus(txn.Status)
 
-	// Cannot transition from a final state (PRD state machine).
-	if currentStatus.IsFinal() {
+	// Go-level validation — provides clear error messages.
+	// (The SQL WHERE clause is the actual safety net against races.)
+	if currentStatus.IsFinal() && newStatus != models.StatusRefunded {
 		return nil, ErrTransactionFinalized
 	}
 
-	// Validate the transition is allowed.
 	if !isValidTransition(currentStatus, newStatus) {
 		return nil, fmt.Errorf("%w: %s → %s", ErrInvalidStatusTransition, currentStatus, newStatus)
 	}
@@ -289,12 +295,19 @@ func (s *TransactionService) UpdateStatus(
 		failureReason = reason
 	}
 
-	updated, err := qtx.UpdateTransactionStatus(ctx, db.UpdateTransactionStatusParams{
+	// SQL-level atomic guard: WHERE status NOT IN ('SUCCESS','FAILED','TIMEOUT','REFUNDED')
+	// If another goroutine already moved the transaction to a final state,
+	// this returns pgx.ErrNoRows — no data corruption possible.
+	updated, err := qtx.UpdateTransactionStatusSafe(ctx, db.UpdateTransactionStatusSafeParams{
 		ID:            txID,
 		Status:        db.TransactionStatus(newStatus),
 		FailureReason: failureReason,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Another goroutine already finalized this transaction.
+			return nil, ErrTransactionFinalized
+		}
 		return nil, fmt.Errorf("updating status: %w", err)
 	}
 
@@ -393,14 +406,17 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 // =============================================================================
 
 // generateInternalRef creates a unique internal reference: FAYA-YYYYMMDD-XXXXXXXX
+// FIX M3: Uses crypto/rand instead of math/rand for unpredictable references.
 func generateInternalRef() string {
 	date := time.Now().Format("20060102")
-	suffix := fmt.Sprintf("%08X", rand.Int31())
+	var buf [4]byte
+	crypto_rand.Read(buf[:]) //nolint:errcheck
+	suffix := fmt.Sprintf("%08X", binary.BigEndian.Uint32(buf[:]))
 	return fmt.Sprintf("FAYA-%s-%s", date, suffix)
 }
 
 // dispatchToGateway sends a payment instruction to the appropriate gateway via WebSocket.
-func (s *TransactionService) dispatchToGateway(txn db.Transaction) {
+func (s *TransactionService) dispatchToGateway(ctx context.Context, txn db.Transaction) {
 	// TODO: Implement when gateway Hub message routing is built.
 	// This will:
 	// 1. Find an available gateway for the operator (txn.Operator)

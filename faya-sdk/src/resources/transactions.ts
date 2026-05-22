@@ -4,6 +4,7 @@ import type {
   Transaction,
   TransactionListParams,
 } from '../types'
+import { FayaPayValidationError } from '../errors'
 import type { RequestFn } from '../client'
 
 /**
@@ -30,6 +31,18 @@ export class Transactions {
    * @throws {FayaPayGatewayUnavailableError} If the payment gateway is offline
    */
   async initiate(params: InitiateTransactionRequest): Promise<Transaction> {
+    // [M4 FIX] Fail-fast on obviously invalid amount
+    if (
+      !Number.isFinite(params.amount) ||
+      !Number.isInteger(params.amount) ||
+      params.amount <= 0
+    ) {
+      throw new FayaPayValidationError(
+        `amount must be a positive integer. Received: ${params.amount}`,
+        { amount: 'must be a positive integer (XAF, no decimals)' }
+      )
+    }
+
     return this.request<Transaction>('POST', '/v1/transactions', {
       body: params,
     })

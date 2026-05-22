@@ -1,10 +1,19 @@
 import { create } from 'zustand'
 import type { Merchant } from '@/lib/types'
 import { getProfile, logout as apiLogout } from '@/lib/api/merchants'
+import type { QueryClient } from '@tanstack/react-query'
 
 // =============================================================================
 // Auth Store — Zustand
 // =============================================================================
+
+// [H-3 FIX] Référence au QueryClient pour clear le cache au logout
+let queryClientRef: QueryClient | null = null
+
+/** Appelé par Providers au montage pour lier le QueryClient au store */
+export function setQueryClientRef(client: QueryClient) {
+  queryClientRef = client
+}
 
 interface AuthState {
   /** Merchant connecté (null si non authentifié) */
@@ -18,7 +27,7 @@ interface AuthState {
 interface AuthActions {
   /** Met à jour le merchant dans le store */
   setMerchant: (merchant: Merchant) => void
-  /** Déconnexion : appel API + nettoyage du store + redirect */
+  /** Déconnexion : appel API + nettoyage du store + clear cache + redirect */
   logout: () => Promise<void>
   /** Hydrate le store au montage en récupérant le profil depuis le cookie JWT */
   hydrate: () => Promise<void>
@@ -44,6 +53,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       // Même si l'appel API échoue, on nettoie le state local
     } finally {
       set({ merchant: null, isLoading: false })
+      // [H-3 FIX] Vider tout le cache de données de l'ancien merchant
+      queryClientRef?.clear()
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
       }
@@ -61,8 +72,12 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       const merchant = await getProfile()
       set({ merchant, isHydrated: true, isLoading: false })
     } catch {
-      // Pas de cookie valide ou erreur réseau → pas de merchant
+      // [H-2 FIX] JWT expiré ou invalide → forcer redirect login
+      // au lieu de rester sur le dashboard avec merchant=null
       set({ merchant: null, isHydrated: true, isLoading: false })
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
     }
   },
 }))

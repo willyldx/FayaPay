@@ -26,6 +26,32 @@ SET status         = $2,
 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateTransactionStatusSafe :one
+-- Atomic state machine guard: rejects the update if the transaction
+-- is already in a terminal state. Returns pgx.ErrNoRows if the
+-- WHERE clause doesn't match — the caller interprets this as
+-- "someone else already moved the transaction to a final state."
+UPDATE transactions
+SET status         = $2,
+    failure_reason = $3,
+    updated_at     = NOW()
+WHERE id = $1
+  AND status NOT IN ('SUCCESS', 'FAILED', 'TIMEOUT', 'REFUNDED')
+RETURNING *;
+
+-- name: ExpireTransaction :one
+-- Used by the timeout worker. Only transitions PENDING/PROCESSING → TIMEOUT.
+-- If the transaction was already confirmed (SUCCESS) between the scan and this
+-- UPDATE, this returns 0 rows — preventing the catastrophic C1/C2 race.
+UPDATE transactions
+SET status         = 'TIMEOUT',
+    failure_reason = $2,
+    updated_at     = NOW()
+WHERE id = $1
+  AND (status = 'PENDING' OR status = 'PROCESSING')
+RETURNING *;
+
+
 -- name: ConfirmTransaction :one
 UPDATE transactions
 SET status       = 'SUCCESS',

@@ -25,6 +25,7 @@ export function useDashboardStats(period: string = '7d') {
     queryKey: dashboardKeys.stats(period),
     queryFn: () => getDashboardStats(period),
     refetchInterval: 30_000, // 30s — conformément au PRD
+    refetchIntervalInBackground: false, // [M-3 FIX] Stop polling en onglet inactif
     staleTime: 15_000,       // Considérer frais pendant 15s
   })
 }

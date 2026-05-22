@@ -127,26 +127,3 @@ export interface VerifyWebhookParams {
   secret: string
 }
 
-// ─── API Response envelope ──────────────────────────────────────────
-
-/** @internal — used by the SDK client, not part of the public merchant API */
-export interface ApiResponse<T> {
-  success: boolean
-  data: T
-  error?: {
-    code: string
-    message: string
-    fields?: Record<string, string>
-  }
-}
-
-/** @internal */
-export interface ApiErrorResponse {
-  success: false
-  error: {
-    code: string
-    message: string
-    fields?: Record<string, string>
-    existing_transaction?: Transaction
-  }
-}

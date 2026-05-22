@@ -7,7 +7,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS webhook_endpoints (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    merchant_id UUID NOT NULL REFERENCES merchants(id),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE RESTRICT,
     url         VARCHAR(500) NOT NULL,
     secret      VARCHAR(255) NOT NULL,   -- HMAC-SHA256 signing secret for payloads
     is_active   BOOLEAN DEFAULT true,

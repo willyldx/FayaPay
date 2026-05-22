@@ -3,10 +3,12 @@ package workers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
@@ -78,6 +80,8 @@ func (h *TimeoutHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 
 // expireTransaction transitions a single transaction to TIMEOUT status
 // within a database transaction (atomic status update + audit log).
+// Uses the guarded ExpireTransaction query — if the transaction was already
+// confirmed (SUCCESS) between the scan and this update, no rows are affected.
 func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transaction) error {
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
@@ -87,15 +91,24 @@ func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transacti
 
 	qtx := h.queries.WithTx(tx)
 
-	// Update status to TIMEOUT.
+	// SQL-level guard: WHERE status IN ('PENDING', 'PROCESSING')
+	// If the status already changed (e.g., SUCCESS via SMS), this returns
+	// pgx.ErrNoRows — we skip silently instead of corrupting data.
 	failureReason := "TRANSACTION_TIMEOUT"
-	_, err = qtx.UpdateTransactionStatus(ctx, db.UpdateTransactionStatusParams{
+	_, err = qtx.ExpireTransaction(ctx, db.ExpireTransactionParams{
 		ID:            txn.ID,
-		Status:        db.TransactionStatusTIMEOUT,
 		FailureReason: &failureReason,
 	})
 	if err != nil {
-		return fmt.Errorf("updating status: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Transaction already moved to a final state — skip.
+			h.logger.Info("transaction already finalized, skipping timeout",
+				zap.String("transaction_id", txn.ID.String()),
+				zap.String("current_status", string(txn.Status)),
+			)
+			return nil
+		}
+		return fmt.Errorf("expiring transaction: %w", err)
 	}
 
 	// Audit log — every status change must produce an audit entry (PRD rule #6).

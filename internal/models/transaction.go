@@ -44,9 +44,10 @@ func (s TransactionStatus) IsValid() bool {
 
 // IsFinal returns true if the transaction is in a terminal state
 // and cannot transition further.
+// Note: SUCCESS is NOT final — it can transition to REFUNDED.
 func (s TransactionStatus) IsFinal() bool {
 	switch s {
-	case StatusSuccess, StatusFailed, StatusTimeout, StatusRefunded:
+	case StatusFailed, StatusTimeout, StatusRefunded:
 		return true
 	default:
 		return false

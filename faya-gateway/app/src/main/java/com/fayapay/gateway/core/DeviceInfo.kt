@@ -80,9 +80,11 @@ class DeviceInfo(
      * Returns null if not yet configured.
      */
     suspend fun getGatewayToken(): String? {
-        return dataStore.data.map { prefs ->
+        val encrypted = dataStore.data.map { prefs ->
             prefs[KEY_GATEWAY_TOKEN]
-        }.first()
+        }.first() ?: return null
+
+        return SecureStorage.decrypt(encrypted)
     }
 
     /**
@@ -147,7 +149,8 @@ class DeviceInfo(
     }
 
     suspend fun setGatewayToken(token: String) {
-        dataStore.edit { it[KEY_GATEWAY_TOKEN] = token }
+        val encrypted = SecureStorage.encrypt(token)
+        dataStore.edit { it[KEY_GATEWAY_TOKEN] = encrypted }
     }
 
     suspend fun setAirtelSenderNumbers(numbers: List<String>) {

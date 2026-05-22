@@ -1,13 +1,11 @@
 package com.fayapay.gateway.ussd
 
 import android.content.Context
-import android.net.Uri
-import android.os.Build
-import android.telecom.TelecomManager
 import android.telephony.TelephonyManager
 import com.fayapay.gateway.core.DeviceInfo
 import com.fayapay.gateway.sim.SimManager
 import com.fayapay.gateway.sim.SimSelector
+import com.fayapay.gateway.core.LogSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -69,7 +67,7 @@ class UssdExecutor(
 
         // 2. Build the USSD string from template
         val ussdCode = buildUssdCode(template, phoneNumber, amount)
-        Timber.i("UssdExecutor — Built USSD code: $ussdCode for operator=$operator")
+        Timber.i("UssdExecutor — USSD code built for operator=$operator")
 
         // 3. Get the correct SIM subscription ID
         val subscriptionId = try {

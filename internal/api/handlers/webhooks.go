@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"errors"
+	"net"
+	"net/url"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -47,6 +49,14 @@ func (h *WebhookHandler) Create(c *fiber.Ctx) error {
 	if req.URL == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "url is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	// SSRF protection: validate URL scheme and block private/internal networks.
+	if err := validateWebhookURL(req.URL); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
 			"code":  "VALIDATION_ERROR",
 		})
 	}
@@ -151,4 +161,51 @@ func (h *WebhookHandler) Test(c *fiber.Ctx) error {
 		"status":  "ok",
 		"message": "test webhook delivered successfully",
 	})
+}
+
+// =============================================================================
+// SSRF protection
+// =============================================================================
+
+// validateWebhookURL ensures the URL is a valid public HTTP(S) endpoint.
+// Blocks: non-HTTP schemes, private IPs, loopback, link-local, cloud metadata.
+func validateWebhookURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return errors.New("url is not valid")
+	}
+
+	// Only allow http and https schemes.
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("url must use http or https scheme")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return errors.New("url must contain a hostname")
+	}
+
+	// Resolve hostname to check for private IPs.
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		// If DNS fails, allow it — the webhook delivery will fail at runtime
+		// with a proper error message rather than blocking creation.
+		return nil
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return errors.New("url must not point to a private or internal network")
+		}
+		// Block cloud metadata endpoints (169.254.169.254).
+		if ip.Equal(net.ParseIP("169.254.169.254")) {
+			return errors.New("url must not point to a cloud metadata endpoint")
+		}
+	}
+
+	return nil
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -12,10 +12,22 @@ import { login } from '@/lib/api/merchants'
 import { useAuthStore } from '@/lib/stores/authStore'
 
 // =============================================================================
-// Page Login
+// Page Login — Suspense boundary pour useSearchParams (Next.js 14)
 // =============================================================================
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="card p-8 h-[420px] animate-pulse" />}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+// =============================================================================
+// LoginForm — Formulaire de connexion
+// =============================================================================
+
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const setMerchant = useAuthStore((s) => s.setMerchant)
@@ -39,8 +51,13 @@ export default function LoginPage() {
       const response = await login(data)
       setMerchant(response.merchant)
 
-      // Redirect vers l'URL d'origine ou le dashboard
-      const redirect = searchParams.get('redirect') ?? '/'
+      // [C-1 FIX] Valider que la redirection est un chemin local (pas d'URL absolue)
+      // Empêche les open redirect attacks via ?redirect=https://evil.com
+      const rawRedirect = searchParams.get('redirect') ?? '/'
+      const redirect =
+        rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
+          ? rawRedirect
+          : '/'
       router.push(redirect)
     } catch (error) {
       if (error instanceof Error) {

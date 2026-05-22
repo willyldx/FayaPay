@@ -24,14 +24,24 @@ const (
 // Only its SHA-256 hash is persisted in the database.
 func GenerateAPIKey() (key string, prefix string, err error) {
 	buf := make([]byte, keyLength)
-	if _, err := rand.Read(buf); err != nil {
-		return "", "", fmt.Errorf("crypto/rand failed: %w", err)
-	}
 
-	// Map each random byte to a character in the charset.
-	// Using modulo introduces negligible bias given charset length (62) vs byte range (256).
-	for i := range buf {
-		buf[i] = charset[buf[i]%byte(len(charset))]
+	// FIX L5: Rejection sampling eliminates modulo bias.
+	// The old code (buf[i] % 62) biased the first 8 charset characters by ~3.1%.
+	// We reject random bytes >= 248 (largest multiple of 62 ≤ 256).
+	charsetLen := byte(len(charset))
+	maxUnbiased := byte(256 - (256 % int(charsetLen))) // 248
+	for i := 0; i < keyLength; i++ {
+		for {
+			b := make([]byte, 1)
+			if _, err := rand.Read(b); err != nil {
+				return "", "", fmt.Errorf("crypto/rand failed: %w", err)
+			}
+			if b[0] < maxUnbiased {
+				buf[i] = charset[b[0]%charsetLen]
+				break
+			}
+			// Reject and retry (~3% chance per iteration).
+		}
 	}
 
 	fullKey := APIKeyPrefix + string(buf)

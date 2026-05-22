@@ -32,6 +32,19 @@ export class FayaPayError extends Error {
     // Restore prototype chain (required for instanceof to work with TS targets < ES2015)
     Object.setPrototypeOf(this, new.target.prototype)
   }
+
+  /**
+   * [M5 FIX] Ensures JSON.stringify(error) produces useful output.
+   * By default, Error properties are non-enumerable → JSON.stringify returns {}.
+   */
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      statusCode: this.statusCode,
+    }
+  }
 }
 
 // ─── Authentication ─────────────────────────────────────────────────
@@ -62,6 +75,13 @@ export class FayaPayValidationError extends FayaPayError {
     this.name = 'FayaPayValidationError'
     this.fields = fields
   }
+
+  override toJSON(): Record<string, unknown> {
+    return {
+      ...super.toJSON(),
+      fields: this.fields,
+    }
+  }
 }
 
 // ─── Not Found ──────────────────────────────────────────────────────
@@ -80,17 +100,41 @@ export class FayaPayNotFoundError extends FayaPayError {
 // ─── Duplicate Reference ────────────────────────────────────────────
 
 /**
+ * [M3 FIX] Redact phone_number from existingTransaction to prevent
+ * accidental PII leaks in logs (Sentry, Datadog, ELK, etc.).
+ */
+function redactTransaction(tx?: Transaction): Transaction | undefined {
+  if (!tx) return undefined
+  return {
+    ...tx,
+    phone_number: tx.phone_number
+      ? `${tx.phone_number.slice(0, 6)}****${tx.phone_number.slice(-2)}`
+      : '',
+  }
+}
+
+/**
  * Thrown when a transaction with the same reference already exists.
  * HTTP 409. Exposes the existing transaction for idempotent handling.
+ *
+ * Note: `phone_number` is redacted in `existingTransaction` to prevent
+ * accidental PII leaks in log aggregators.
  */
 export class FayaPayDuplicateError extends FayaPayError {
-  /** The existing transaction that already uses this reference */
+  /** The existing transaction that already uses this reference (phone redacted) */
   readonly existingTransaction?: Transaction
 
   constructor(message: string, existingTransaction?: Transaction) {
     super(message, 'DUPLICATE_REFERENCE', 409)
     this.name = 'FayaPayDuplicateError'
-    this.existingTransaction = existingTransaction
+    this.existingTransaction = redactTransaction(existingTransaction)
+  }
+
+  override toJSON(): Record<string, unknown> {
+    return {
+      ...super.toJSON(),
+      existingTransaction: this.existingTransaction,
+    }
   }
 }
 

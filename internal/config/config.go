@@ -33,6 +33,9 @@ type Config struct {
 
 	// Transaction
 	TransactionTimeoutMinutes int `mapstructure:"TRANSACTION_TIMEOUT_MINUTES"`
+
+	// CORS
+	CORSOrigins string `mapstructure:"CORS_ORIGINS"`
 }
 
 // IsProd returns true if the environment is set to production.
@@ -81,6 +84,7 @@ func Load() (*Config, error) {
 	cfg.GatewayTokenSecret = v.GetString("GATEWAY_TOKEN_SECRET")
 	cfg.WebhookTimeoutSeconds = v.GetInt("WEBHOOK_TIMEOUT_SECONDS")
 	cfg.TransactionTimeoutMinutes = v.GetInt("TRANSACTION_TIMEOUT_MINUTES")
+	cfg.CORSOrigins = v.GetString("CORS_ORIGINS")
 
 	// Parse JWT expiry as a duration string (e.g. "24h", "30m").
 	expiryStr := v.GetString("JWT_EXPIRY")
@@ -105,11 +109,11 @@ func (c *Config) validate() error {
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
-	if c.JWTSecret == "" || c.JWTSecret == "change_me_to_a_long_random_secret" {
-		missing = append(missing, "JWT_SECRET (must be changed from default)")
+	if c.JWTSecret == "" || len(c.JWTSecret) < 32 || c.JWTSecret == "change_me_to_a_long_random_secret" {
+		missing = append(missing, "JWT_SECRET (must be at least 32 characters)")
 	}
-	if c.GatewayTokenSecret == "" || c.GatewayTokenSecret == "change_me_to_another_long_random_secret" {
-		missing = append(missing, "GATEWAY_TOKEN_SECRET (must be changed from default)")
+	if c.GatewayTokenSecret == "" || len(c.GatewayTokenSecret) < 32 || c.GatewayTokenSecret == "change_me_to_another_long_random_secret" {
+		missing = append(missing, "GATEWAY_TOKEN_SECRET (must be at least 32 characters)")
 	}
 	if c.Port < 1 || c.Port > 65535 {
 		missing = append(missing, "PORT (must be between 1 and 65535)")

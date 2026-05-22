@@ -24,7 +24,7 @@ object SmsDispatcher {
      * Consumed by [SmsFilter] which decides whether to process the SMS.
      */
     private val _smsEvents = MutableSharedFlow<RawSms>(
-        extraBufferCapacity = 32
+        extraBufferCapacity = 256  // Must not drop financial SMS — large buffer
     )
     val smsEvents: SharedFlow<RawSms> = _smsEvents.asSharedFlow()
 

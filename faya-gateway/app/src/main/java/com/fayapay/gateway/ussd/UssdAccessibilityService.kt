@@ -224,6 +224,7 @@ class UssdAccessibilityService : AccessibilityService() {
      */
     private fun clickConfirmButton() {
         val rootNode = rootInActiveWindow ?: return
+        var rootRecycled = false
 
         try {
             val confirmLabels = listOf(
@@ -241,6 +242,7 @@ class UssdAccessibilityService : AccessibilityService() {
                         Timber.i("UssdAccessibilityService — Clicked '$label' button")
                         node.recycle()
                         rootNode.recycle()
+                        rootRecycled = true
                         return
                     }
                     // If the node itself isn't clickable, try its parent
@@ -251,6 +253,7 @@ class UssdAccessibilityService : AccessibilityService() {
                         parent.recycle()
                         node.recycle()
                         rootNode.recycle()
+                        rootRecycled = true
                         return
                     }
                     parent?.recycle()
@@ -262,9 +265,8 @@ class UssdAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             Timber.e(e, "UssdAccessibilityService — Error clicking confirm button")
         } finally {
-            try {
-                rootNode.recycle()
-            } catch (_: Exception) {
+            if (!rootRecycled) {
+                try { rootNode.recycle() } catch (_: Exception) { }
             }
         }
     }

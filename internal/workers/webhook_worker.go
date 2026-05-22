@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -141,7 +142,11 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		h.logAuditWebhookFailed(ctx, txID, merchantID, err.Error())
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	// FIX M8: Drain response body to enable TCP connection reuse.
+	defer func() {
+		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		resp.Body.Close()
+	}()
 
 	// ---- Handle response ----
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

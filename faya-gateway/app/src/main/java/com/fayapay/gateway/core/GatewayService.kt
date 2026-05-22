@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -90,6 +91,8 @@ class GatewayService : Service() {
 
             else -> {
                 // ACTION_START or null (system restart after kill)
+                // H5 fix: Ensure wake lock is held after system restart
+                acquireWakeLock()
                 startForegroundWithNotification()
                 startGateway()
                 return START_STICKY
@@ -189,7 +192,10 @@ class GatewayService : Service() {
     }
 
     private fun stopGateway() {
-        serviceScope.launch {
+        // Must run synchronously — service is about to be destroyed.
+        // Using runBlocking is intentional here: we need GatewayManager.stop()
+        // to complete BEFORE serviceScope.cancel() in onDestroy().
+        runBlocking(Dispatchers.Default) {
             try {
                 gatewayManager.stop()
                 Timber.i("GatewayService — Gateway manager stopped")

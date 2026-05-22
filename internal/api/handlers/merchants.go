@@ -51,12 +51,22 @@ func (h *MerchantHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// FIX M4: bcrypt silently truncates at 72 bytes — two passwords
+	// sharing the same first 72 bytes would produce identical hashes.
+	if len(req.Password) > 72 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "password must not exceed 72 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
 	merchant, err := h.service.Register(c.Context(), req)
 	if err != nil {
 		if errors.Is(err, services.ErrEmailAlreadyTaken) {
+			// FIX L3: Generic message to prevent email enumeration.
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "email already registered",
-				"code":  "EMAIL_TAKEN",
+				"error": "registration failed — check your details and try again",
+				"code":  "REGISTRATION_CONFLICT",
 			})
 		}
 		h.logger.Error("register failed", zap.Error(err))

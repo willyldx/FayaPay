@@ -44,6 +44,14 @@ class GatewayManager(
     private val isStarted = AtomicBoolean(false)
 
     /**
+     * SMS deduplication cache.
+     * Key: hash of sender+body, Value: timestamp of last seen.
+     * Prevents double-processing when operators send duplicate SMS.
+     */
+    private val recentSmsHashes = LinkedHashMap<String, Long>(32, 0.75f, true)
+    private val SMS_DEDUP_WINDOW_MS = 60_000L
+
+    /**
      * Starts all subsystems in the correct order.
      * Idempotent — duplicate calls are ignored.
      */
@@ -76,6 +84,15 @@ class GatewayManager(
         messageHandler.onPingReceived = { heartbeatManager.sendPongNow() }
         ussdExecutor.deviceInfo = deviceInfo
         ussdSessionManager.ussdExecutor = ussdExecutor
+        ussdSessionManager.onSmsTimeout = { txId ->
+            Timber.e("GatewayManager — SMS confirmation timeout for tx=$txId, notifying backend")
+            webSocketClient.send(
+                OutgoingMessage.OperationFailed(
+                    transactionId = txId,
+                    reason = "SMS_CONFIRMATION_TIMEOUT"
+                )
+            )
+        }
 
         // 4. Wire SMS pipeline: SmsFilter → SmsParser → WebSocket
         smsFilter.onOperatorSmsReceived = { rawSms, origin ->
@@ -109,6 +126,8 @@ class GatewayManager(
         Timber.i("GatewayManager — Stopping subsystems")
 
         heartbeatManager.stop()
+        smsFilter.stop()
+        messageHandler.stopListening()
         ussdSessionManager.cancelAll()
         webSocketClient.disconnect()
 
@@ -129,20 +148,34 @@ class GatewayManager(
      * 4. If no match → log for debugging (orphaned SMS)
      */
     private fun handleOperatorSms(rawSms: RawSms, origin: SmsFilter.OperatorOrigin) {
+        // H4 fix: Deduplicate SMS — same sender+body within 60s = duplicate
+        val smsHash = "${rawSms.sender}:${rawSms.body}".hashCode().toString()
+        val now = System.currentTimeMillis()
+        synchronized(recentSmsHashes) {
+            val lastSeen = recentSmsHashes[smsHash]
+            if (lastSeen != null && (now - lastSeen) < SMS_DEDUP_WINDOW_MS) {
+                Timber.w("GatewayManager — Duplicate SMS detected, ignoring")
+                return
+            }
+            recentSmsHashes[smsHash] = now
+            // Purge old entries
+            recentSmsHashes.entries.removeAll { (now - it.value) > SMS_DEDUP_WINDOW_MS }
+        }
+
         val operatorStr = when (origin) {
             SmsFilter.OperatorOrigin.AIRTEL -> "AIRTEL"
             SmsFilter.OperatorOrigin.MOOV -> "MOOV"
             SmsFilter.OperatorOrigin.UNKNOWN -> "UNKNOWN"
         }
 
-        Timber.i("GatewayManager — Operator SMS received: operator=$operatorStr sender=${rawSms.sender}")
+        Timber.i("GatewayManager — Operator SMS received: operator=$operatorStr sender=${LogSanitizer.phone(rawSms.sender)}")
 
         // Parse the SMS
         val parsed = smsParser.parse(rawSms.body, operatorStr)
 
         Timber.i(
             "GatewayManager — Parsed SMS: success=${parsed.success} " +
-            "amount=${parsed.amount} phone=${parsed.senderPhone} ref=${parsed.reference}"
+            "amount=${LogSanitizer.amount(parsed.amount)} phone=${LogSanitizer.phone(parsed.senderPhone)} ref=${LogSanitizer.reference(parsed.reference)}"
         )
 
         // Try to match with a pending transaction
@@ -151,7 +184,7 @@ class GatewayManager(
         if (pendingTxIds.isEmpty()) {
             Timber.w(
                 "GatewayManager — Operator SMS received but no pending transactions. " +
-                "Orphaned SMS: $rawSms"
+                "Orphaned SMS from ${LogSanitizer.phone(rawSms.sender)} ${LogSanitizer.smsBody(rawSms.body)}"
             )
             return
         }

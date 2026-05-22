@@ -38,7 +38,8 @@ export function TransactionDetail({
   isOpen,
   onClose,
 }: TransactionDetailProps) {
-  const { data: tx, isLoading } = useTransaction(transactionId ?? '')
+  // [M-2 FIX] Passer isOpen pour ne pas fetch quand le drawer est fermé
+  const { data: tx, isLoading } = useTransaction(transactionId ?? '', isOpen)
 
   // --- Fermer avec Escape ---
   useEffect(() => {
@@ -58,7 +59,12 @@ export function TransactionDetail({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div
+      className="fixed inset-0 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tx-detail-title"
+    >
       {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"

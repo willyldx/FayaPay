@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import com.fayapay.gateway.core.LogSanitizer
 import timber.log.Timber
 
 /**
@@ -40,8 +41,7 @@ class SmsReceiver : BroadcastReceiver() {
         val body = messages.joinToString("") { it.displayMessageBody ?: "" }
         val subscriptionId = intent.getIntExtra("subscription", -1)
 
-        Timber.i("SmsReceiver — SMS from=$sender subId=$subscriptionId length=${body.length}")
-        Timber.d("SmsReceiver — Body: $body")
+        Timber.i("SmsReceiver — SMS from=${LogSanitizer.phone(sender)} subId=$subscriptionId len=${body.length}")
 
         // Delegate to the singleton dispatcher (accessed via Koin from Application)
         SmsDispatcher.onSmsReceived(

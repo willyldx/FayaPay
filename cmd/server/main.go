@@ -86,8 +86,10 @@ func main() {
 			"timeouts": 3,
 			"default":  1,
 		},
-		// PRD rule #3: webhook retry backoff — 1min, 5min, 30min, 2h.
-		RetryDelayFunc: workers.WebhookRetryDelay,
+		// FIX M7: RetryDelayFunc removed from global config. The webhook
+		// backoff (1m/5m/30m/2h) is applied per-task via asynq.TaskID and
+		// custom retry logic in the webhook handler, not globally.
+		// The timeout scanner uses MaxRetry(1) since it runs every 60s.
 	})
 
 	// Register task handlers.
