@@ -1,0 +1,134 @@
+---
+title: Documentation Kadryza — API de paiement Mobile Money
+---
+
+import { Cards, Card, Callout, Steps } from 'nextra/components'
+
+<div className="mt-8 mb-12">
+  <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+    <span className="kadryza-gradient-text">Documentation Kadryza</span>
+  </h1>
+  <p className="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl">
+    L'infrastructure de paiement Mobile Money pour le Tchad et la zone CEMAC.
+    <br />
+    Intégrez les paiements <strong>Airtel Money</strong> et <strong>Moov Money</strong> en quelques minutes.
+  </p>
+</div>
+
+## 🚀 Commencez ici
+
+<Cards>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>⚡</span>}
+    title="Démarrage rapide"
+    href="/quickstart"
+  >
+    Intégrez Kadryza dans votre projet en 5 minutes. Installation, configuration, premier paiement.
+  </Card>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>📡</span>}
+    title="Référence API"
+    href="/api-reference"
+  >
+    Endpoints REST complets : transactions, webhooks, authentification. Exemples curl et SDK.
+  </Card>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>📦</span>}
+    title="SDK JavaScript"
+    href="/sdk"
+  >
+    Le SDK officiel @kadryza/sdk pour Node.js. Méthodes, types, gestion d'erreurs.
+  </Card>
+</Cards>
+
+---
+
+## Comment ça marche
+
+<Steps>
+
+### Créez un compte merchant
+
+Inscrivez-vous sur le [dashboard Kadryza](https://dashboard.kadryza.app/register) pour obtenir un accès à l'environnement de production.
+
+### Obtenez une clé API
+
+Dans le dashboard, accédez à **API Keys** → **Créer une clé**. Votre clé au format `kadryza_live_` est générée instantanément.
+
+<Callout type="warning">
+  Votre clé API n'est affichée qu'**une seule fois** à la création. Copiez-la et stockez-la dans un endroit sécurisé.
+</Callout>
+
+### Initiez votre premier paiement
+
+```javascript
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+const transaction = await kadryza.transactions.initiate({
+  reference: 'order_abc123',
+  amount: 5000,
+  currency: 'XAF',
+  operator: 'AIRTEL',
+  phone_number: '+23566000000',
+  description: 'Paiement commande #ABC123'
+})
+
+console.log(transaction.id)          // UUID de la transaction
+console.log(transaction.status)      // "PENDING"
+console.log(transaction.internal_ref) // "KADRYZA-XXXXXXXX"
+```
+
+</Steps>
+
+---
+
+## Opérateurs supportés
+
+| Opérateur | Pays | Devise | Statut |
+|-----------|------|--------|--------|
+| **Airtel Money** | Tchad 🇹🇩 | XAF (Franc CFA CEMAC) | ✅ Disponible |
+| **Moov Money** | Tchad 🇹🇩 | XAF (Franc CFA CEMAC) | ✅ Disponible |
+
+---
+
+## Ressources utiles
+
+<Cards>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>🔐</span>}
+    title="Authentification"
+    href="/authentication"
+  >
+    Comprendre les clés API, les headers HTTP, et les bonnes pratiques de sécurité.
+  </Card>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
+    title="Guide Webhooks"
+    href="/guides/webhook-verification"
+  >
+    Recevez les notifications de paiement en temps réel. Vérification de signature incluse.
+  </Card>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>❌</span>}
+    title="Codes d'erreur"
+    href="/errors"
+  >
+    Liste complète des erreurs API et SDK avec leurs solutions concrètes.
+  </Card>
+  <Card
+    icon={<span style={{ fontSize: '1.5em' }}>📊</span>}
+    title="Dashboard"
+    href="https://dashboard.kadryza.app"
+  >
+    Gérez vos transactions, clés API et webhooks depuis l'interface d'administration.
+  </Card>
+</Cards>
+
+<Callout type="info" emoji="💡">
+  **Besoin d'aide ?** Consultez les [guides d'intégration](/guides/nextjs) pour Next.js et Express.js,
+  ou envoyez-nous un message à **support@kadryza.app**.
+</Callout>

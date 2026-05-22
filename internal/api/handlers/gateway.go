@@ -5,7 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 
-	"github.com/fayapay/faya-backend/internal/gateway"
+	"github.com/kadryza/kadryza-backend/internal/gateway"
 )
 
 // GatewayHandler handles WebSocket connections from gateway devices

@@ -10,7 +10,7 @@ import (
 
 const (
 	// APIKeyPrefix is prepended to every generated API key for identification.
-	APIKeyPrefix = "faya_live_"
+	APIKeyPrefix = "kadryza_live_"
 
 	// keyLength is the number of random characters after the prefix.
 	keyLength = 32
@@ -19,7 +19,7 @@ const (
 	charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
-// GenerateAPIKey creates a new API key in the format: faya_live_<32 random chars>.
+// GenerateAPIKey creates a new API key in the format: kadryza_live_<32 random chars>.
 // The returned key should be shown to the merchant ONCE and never stored in plaintext.
 // Only its SHA-256 hash is persisted in the database.
 func GenerateAPIKey() (key string, prefix string, err error) {

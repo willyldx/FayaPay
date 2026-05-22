@@ -8,8 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/fayapay/faya-backend/internal/services"
-	"github.com/fayapay/faya-backend/pkg/crypto"
+	"github.com/kadryza/kadryza-backend/internal/services"
+	"github.com/kadryza/kadryza-backend/pkg/crypto"
 )
 
 // Context local keys for sharing auth data between middleware and handlers.

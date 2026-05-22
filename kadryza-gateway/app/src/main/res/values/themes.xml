@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base app theme — dark technical look for a gateway tool -->
+    <style name="Theme.KadryzaGateway" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand colors -->
+        <item name="colorPrimary">#FF6B35</item>
+        <item name="colorPrimaryVariant">#E55A2B</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+
+        <!-- Secondary -->
+        <item name="colorSecondary">#2EC4B6</item>
+        <item name="colorSecondaryVariant">#1FA89B</item>
+        <item name="colorOnSecondary">#000000</item>
+
+        <!-- Background — dark -->
+        <item name="android:colorBackground">#121212</item>
+        <item name="colorSurface">#1E1E1E</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+
+        <!-- Status bar -->
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:navigationBarColor">#0D0D0D</item>
+
+        <!-- Error -->
+        <item name="colorError">#CF6679</item>
+        <item name="colorOnError">#000000</item>
+    </style>
+
+    <!-- Card style for status sections -->
+    <style name="StatusCard">
+        <item name="android:background">@drawable/card_background</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+</resources>

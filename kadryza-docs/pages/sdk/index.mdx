@@ -1,0 +1,289 @@
+---
+title: SDK JavaScript
+description: Vue d'ensemble du SDK officiel @kadryza/sdk — installation, configuration et compatibilité
+---
+
+import { Callout, Tabs } from 'nextra/components'
+
+# SDK JavaScript
+
+Le SDK officiel `@kadryza/sdk` simplifie l'intégration de Kadryza dans vos applications Node.js.
+Il encapsule l'API REST, gère l'authentification, la sérialisation et fournit des classes d'erreur typées.
+
+---
+
+## Pourquoi utiliser le SDK
+
+| Avec l'API REST directement | Avec le SDK |
+|---|---|
+| Gérer manuellement les headers HTTP | ✅ Headers automatiques |
+| Parser les réponses JSON | ✅ Objets typés retournés |
+| Gérer les codes d'erreur HTTP | ✅ Classes d'erreur typées (`KadryzaAuthError`, etc.) |
+| Calculer les signatures HMAC | ✅ `kadryza.webhooks.verifySignature()` |
+| Implémenter l'idempotence | ✅ Gérée nativement via `reference` |
+
+---
+
+## Installation
+
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']}>
+  <Tabs.Tab>
+```bash
+npm install @kadryza/sdk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+yarn add @kadryza/sdk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+pnpm add @kadryza/sdk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+bun add @kadryza/sdk
+```
+  </Tabs.Tab>
+</Tabs>
+
+---
+
+## Configuration
+
+### Configuration de base
+
+```javascript filename="Initialisation minimale"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+```
+
+### Configuration complète
+
+```javascript filename="Toutes les options"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  // Clé API (obligatoire)
+  apiKey: process.env.KADRYZA_API_KEY,
+
+  // URL de base de l'API (optionnel)
+  // Défaut : https://api.kadryza.app
+  baseUrl: 'https://api.kadryza.app',
+
+  // Timeout des requêtes en millisecondes (optionnel)
+  // Défaut : 30000 (30 secondes)
+  timeout: 30000,
+
+  // Nombre de tentatives en cas d'erreur réseau (optionnel)
+  // Défaut : 0 (pas de retry automatique)
+  maxRetries: 3
+})
+```
+
+### Signature TypeScript du constructeur
+
+```typescript filename="Types"
+interface KadryzaConfig {
+  /** Clé API au format kadryza_live_xxx — obligatoire */
+  apiKey: string
+
+  /** URL de base de l'API — défaut: https://api.kadryza.app */
+  baseUrl?: string
+
+  /** Timeout des requêtes HTTP en ms — défaut: 30000 */
+  timeout?: number
+
+  /** Nombre de retries automatiques pour les erreurs réseau — défaut: 0 */
+  maxRetries?: number
+}
+
+declare class Kadryza {
+  constructor(config: KadryzaConfig)
+
+  /** Client transactions */
+  readonly transactions: TransactionsClient
+
+  /** Client webhooks */
+  readonly webhooks: WebhooksClient
+}
+```
+
+---
+
+## Variable d'environnement
+
+Stockez votre clé API dans un fichier `.env` :
+
+```bash filename=".env"
+KADRYZA_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+KADRYZA_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+<Callout type="error" emoji="🔐">
+  **Ne commitez jamais votre fichier `.env`.**
+  Ajoutez-le à votre `.gitignore` et utilisez les secrets de votre plateforme de déploiement
+  (Vercel, Railway, Heroku, etc.) en production.
+</Callout>
+
+Pour les projets Node.js sans framework, chargez les variables avec `dotenv` :
+
+```javascript filename="Chargement des variables"
+import 'dotenv/config'
+import Kadryza from '@kadryza/sdk'
+
+// process.env.KADRYZA_API_KEY est maintenant disponible
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+```
+
+---
+
+## Compatibilité des runtimes
+
+Le SDK `@kadryza/sdk` est compatible avec les runtimes JavaScript modernes suivants :
+
+| Runtime | Version minimale | Statut | Notes |
+|---------|-----------------|--------|-------|
+| **Node.js** | 18.0+ | ✅ Supporté | Runtime principal, testé en CI |
+| **Bun** | 1.0+ | ✅ Supporté | Compatible nativement |
+| **Deno** | 1.28+ | ✅ Supporté | Via `npm:` specifier |
+| **Edge Runtimes** | — | ✅ Supporté | Vercel Edge, Cloudflare Workers |
+| **Navigateur** | — | ❌ Non supporté | La clé API serait exposée |
+
+### Node.js (runtime principal)
+
+```javascript filename="Node.js 18+"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+```
+
+### Bun
+
+```javascript filename="Bun"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: Bun.env.KADRYZA_API_KEY
+})
+```
+
+### Deno
+
+```typescript filename="Deno"
+import Kadryza from 'npm:@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: Deno.env.get('KADRYZA_API_KEY')
+})
+```
+
+### Vercel Edge Functions
+
+```typescript filename="api/payment/route.ts"
+import Kadryza from '@kadryza/sdk'
+
+export const runtime = 'edge'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+export async function POST(request: Request) {
+  const body = await request.json()
+
+  const transaction = await kadryza.transactions.initiate({
+    reference: body.orderId,
+    amount: body.amount,
+    currency: 'XAF',
+    operator: body.operator,
+    phone_number: body.phoneNumber
+  })
+
+  return Response.json(transaction, { status: 201 })
+}
+```
+
+<Callout type="warning" emoji="⚠️">
+  **Navigateur non supporté** — Le SDK nécessite une clé API qui ne doit **jamais**
+  être exposée côté client. Utilisez le SDK uniquement dans du code serveur.
+  Voir l'[architecture recommandée](/authentication#✅-à-faire).
+</Callout>
+
+---
+
+## Structure du SDK
+
+Le SDK expose deux clients principaux via l'instance `Kadryza` :
+
+```
+Kadryza
+├── transactions
+│   ├── initiate(params)   → Transaction
+│   ├── get(id)            → Transaction
+│   └── list(filters?)     → PaginatedResult<Transaction>
+└── webhooks
+    └── verifySignature(params) → boolean
+```
+
+Consultez la [référence complète du SDK](/sdk/reference) pour la documentation détaillée
+de chaque méthode, ses paramètres, ses types de retour et ses erreurs possibles.
+
+---
+
+## Exemple rapide : paiement complet
+
+```javascript filename="quick-start.js"
+import Kadryza, { KadryzaError } from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+try {
+  // Initier un paiement de 10 000 XAF via Airtel Money
+  const tx = await kadryza.transactions.initiate({
+    reference: 'demo_2025_001',
+    amount: 10000,
+    currency: 'XAF',
+    operator: 'AIRTEL',
+    phone_number: '+23566000000',
+    description: 'Démonstration SDK Kadryza'
+  })
+
+  console.log(`✅ Transaction créée : ${tx.internal_ref}`)
+  console.log(`   Statut : ${tx.status}`)
+  console.log(`   Expire à : ${tx.expires_at}`)
+
+  // Récupérer la transaction plus tard
+  const updated = await kadryza.transactions.get(tx.id)
+  console.log(`   Statut actuel : ${updated.status}`)
+
+} catch (error) {
+  if (error instanceof KadryzaError) {
+    console.error(`Erreur Kadryza [${error.code}]: ${error.message}`)
+  } else {
+    throw error
+  }
+}
+```
+
+---
+
+## Prochaines étapes
+
+| Ressource | Description |
+|-----------|-------------|
+| [Référence complète du SDK](/sdk/reference) | Documentation de chaque méthode, types TypeScript, erreurs |
+| [Référence API — Transactions](/api-reference/transactions) | Endpoints REST sous-jacents |
+| [Référence API — Webhooks](/api-reference/webhooks) | Vérification de signature, events, retry |
+| [Codes d'erreur](/errors) | Toutes les classes d'erreur SDK |

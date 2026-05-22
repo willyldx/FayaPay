@@ -14,10 +14,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/fayapay/faya-backend/internal/config"
-	db "github.com/fayapay/faya-backend/internal/db/sqlc"
-	"github.com/fayapay/faya-backend/internal/models"
-	"github.com/fayapay/faya-backend/pkg/crypto"
+	"github.com/kadryza/kadryza-backend/internal/config"
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/models"
+	"github.com/kadryza/kadryza-backend/pkg/crypto"
 )
 
 // =============================================================================
@@ -309,7 +309,7 @@ func (s *MerchantService) generateJWT(merchantID uuid.UUID, email string, expire
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "fayapay",
+			Issuer:    "kadryza",
 		},
 	}
 

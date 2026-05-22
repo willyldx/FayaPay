@@ -1,0 +1,248 @@
+---
+title: Authentification
+description: Guide d'authentification API Kadryza — clés API, JWT dashboard et bonnes pratiques de sécurité
+---
+
+import { Callout, Tabs } from 'nextra/components'
+
+# Authentification
+
+Kadryza utilise deux mécanismes d'authentification distincts selon le contexte d'utilisation.
+Ce guide explique lequel utiliser et comment sécuriser vos intégrations.
+
+---
+
+## Les deux types d'authentification
+
+| | Clé API (API Key) | JWT (JSON Web Token) |
+|---|---|---|
+| **Usage** | Intégration merchant (votre serveur → API Kadryza) | Dashboard Kadryza (navigateur → backend dashboard) |
+| **Qui l'utilise** | Votre code serveur | L'interface web du dashboard |
+| **Format** | `kadryza_live_` + 32 caractères | Token JWT standard (header.payload.signature) |
+| **Durée de vie** | Illimitée (jusqu'à révocation) | Courte durée (session) |
+| **Transport** | Header HTTP `Authorization: Bearer` | Cookie HTTP-only |
+
+<Callout type="warning" emoji="⚠️">
+  **En tant que développeur intégrant Kadryza, vous utilisez exclusivement la clé API.**
+  Le JWT est un mécanisme interne au dashboard. Vous n'avez jamais besoin de le manipuler.
+</Callout>
+
+---
+
+## Clé API — Guide complet
+
+### Format de la clé
+
+```
+kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+         └──────────── 32 caractères ──────────────┘
+```
+
+La clé est composée de :
+- **Préfixe** : `kadryza_live_` — identifie une clé de production
+- **Secret** : 32 caractères alphanumériques aléatoires
+
+### Obtenir une clé API
+
+1. Connectez-vous au [dashboard Kadryza](https://dashboard.kadryza.app)
+2. Accédez à **API Keys** dans le menu latéral
+3. Cliquez sur **Créer une clé**
+4. **Copiez immédiatement la clé affichée**
+
+<Callout type="error" emoji="🔐">
+  **La clé n'est affichée qu'une seule fois.** Si vous la perdez, vous devrez en créer une nouvelle
+  et mettre à jour toutes vos intégrations.
+</Callout>
+
+### Utiliser la clé API
+
+Incluez votre clé dans chaque requête API via le header HTTP `Authorization` :
+
+<Tabs items={['Node.js SDK', 'cURL', 'fetch (Node.js)', 'HTTP brut']}>
+  <Tabs.Tab>
+```javascript filename="Initialisation SDK"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+// Le SDK gère automatiquement le header Authorization
+const transaction = await kadryza.transactions.initiate({
+  reference: 'order_abc123',
+  amount: 5000,
+  currency: 'XAF',
+  operator: 'AIRTEL',
+  phone_number: '+23566000000'
+})
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash filename="Terminal"
+curl -X GET https://api.kadryza.app/v1/transactions \
+  -H "Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```javascript filename="fetch-example.js"
+const response = await fetch('https://api.kadryza.app/v1/transactions', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${process.env.KADRYZA_API_KEY}`,
+    'Content-Type': 'application/json'
+  }
+})
+
+const data = await response.json()
+console.log(data)
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```http filename="Requête HTTP"
+GET /v1/transactions HTTP/1.1
+Host: api.kadryza.app
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Réponses d'erreur d'authentification
+
+Si votre clé est invalide, absente ou révoquée, l'API retourne :
+
+```json filename="401 Unauthorized"
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Clé API invalide ou expirée",
+    "status": 401
+  }
+}
+```
+
+---
+
+## Bonnes pratiques de sécurité
+
+### ✅ À faire
+
+<Callout type="info" emoji="1️⃣">
+  **Utilisez des variables d'environnement** — Stockez votre clé API dans un fichier `.env`
+  et accédez-y via `process.env.KADRYZA_API_KEY`.
+</Callout>
+
+```bash filename=".env"
+# Clé API Kadryza — NE PAS COMMITER CE FICHIER
+KADRYZA_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+KADRYZA_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+```bash filename=".gitignore"
+# Variables d'environnement
+.env
+.env.local
+.env.*.local
+```
+
+<Callout type="info" emoji="2️⃣">
+  **Exécutez le code côté serveur uniquement** — Votre clé API ne doit jamais être présente
+  dans du code exécuté par le navigateur.
+</Callout>
+
+**Architecture correcte :**
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
+│   Navigateur │────▶│  Votre serveur   │────▶│  API Kadryza │
+│   (client)   │     │  (Node.js)       │     │              │
+│              │     │  🔑 Clé API ici  │     │              │
+└──────────────┘     └──────────────────┘     └──────────────┘
+```
+
+Le navigateur envoie une requête à **votre** serveur, qui utilise la clé API pour communiquer avec l'API Kadryza. La clé ne transite **jamais** vers le client.
+
+<Callout type="info" emoji="3️⃣">
+  **Révoquez immédiatement les clés compromises** — Si une clé a été exposée (commit Git, log,
+  capture d'écran), révoquez-la depuis le dashboard et créez-en une nouvelle.
+</Callout>
+
+<Callout type="info" emoji="4️⃣">
+  **Vérifiez toujours les signatures webhook** — Chaque webhook Kadryza inclut un header
+  `X-Kadryza-Signature` contenant un HMAC-SHA256. Vérifiez cette signature avant de traiter l'événement.
+</Callout>
+
+```javascript filename="Vérification de signature webhook"
+import crypto from 'crypto'
+
+function verifyWebhookSignature(payload, signature, secret) {
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex')
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  )
+}
+```
+
+<Callout type="info" emoji="5️⃣">
+  **Utilisez `crypto.timingSafeEqual`** pour comparer les signatures — Cela empêche les attaques
+  par timing side-channel qui pourraient deviner la signature caractère par caractère.
+</Callout>
+
+### ❌ À ne jamais faire
+
+| Pratique dangereuse | Risque |
+|---|---|
+| Commiter la clé dans Git | Exposition publique si le repo est public ou fuité |
+| Utiliser la clé côté client (navigateur) | N'importe quel utilisateur peut la récupérer via DevTools |
+| Logger la clé dans la console | Les logs sont souvent stockés en clair et partagés |
+| Partager la clé par email/Slack/chat | Les messages peuvent être interceptés ou archivés |
+| Utiliser la même clé pour dev et production | Un compromis en dev affecte la production |
+| Ignorer la vérification de signature webhook | Un attaquant peut envoyer de faux événements |
+
+---
+
+## JWT — Authentification du dashboard
+
+<Callout type="default" emoji="ℹ️">
+  Cette section est fournie à titre informatif. En tant que développeur intégrant Kadryza,
+  vous n'avez **pas besoin** de manipuler les JWT. Ils sont gérés automatiquement par l'interface du dashboard.
+</Callout>
+
+Le dashboard Kadryza utilise des JWT pour authentifier les sessions utilisateur :
+
+| Propriété | Valeur |
+|---|---|
+| **Algorithme** | HS256 |
+| **Stockage** | Cookie HTTP-only, Secure, SameSite=Strict |
+| **Durée de vie** | Session (renouvelée automatiquement) |
+| **Contenu** | ID merchant, rôle, permissions |
+
+Le JWT est émis lors de la connexion au dashboard (`POST /auth/login`) et automatiquement
+inclus dans chaque requête du navigateur vers le backend du dashboard.
+
+**Vous ne recevez jamais de JWT via l'API publique.** L'API publique utilise exclusivement les clés API.
+
+---
+
+## Résumé
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Votre intégration                    │
+│                                                         │
+│  1. Créez une clé API dans le dashboard                │
+│  2. Stockez-la dans une variable d'environnement       │
+│  3. Utilisez le header Authorization: Bearer <clé>     │
+│  4. Exécutez le code côté serveur uniquement           │
+│  5. Vérifiez les signatures des webhooks               │
+│                                                         │
+│  C'est tout. Pas de OAuth, pas de token refresh,       │
+│  pas de flux complexe.                                  │
+└─────────────────────────────────────────────────────────┘
+```

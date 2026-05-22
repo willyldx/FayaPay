@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: kadryza-sdk/package-lock.json
+
+      - name: Install dependencies
+        working-directory: kadryza-sdk
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: kadryza-sdk
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: kadryza-sdk
+        run: npm test
+
+      - name: Build
+        working-directory: kadryza-sdk
+        run: npm run build
+
+      - name: Verify dist output
+        working-directory: kadryza-sdk
+        run: |
+          test -f dist/index.js    || (echo "❌ ESM build missing" && exit 1)
+          test -f dist/index.cjs   || (echo "❌ CJS build missing" && exit 1)
+          test -f dist/index.d.ts  || (echo "❌ DTS missing" && exit 1)
+          echo "✅ All build artifacts present"

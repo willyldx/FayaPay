@@ -40,7 +40,7 @@ type CreateWebhookResponse struct {
 }
 
 // WebhookEvent is the payload dispatched to merchant webhook URLs.
-// Signed with HMAC-SHA256 via X-Faya-Signature header.
+// Signed with HMAC-SHA256 via X-Kadryza-Signature header.
 type WebhookEvent struct {
 	Event     string           `json:"event"`
 	Data      WebhookEventData `json:"data"`

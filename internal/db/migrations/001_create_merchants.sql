@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS merchants (
     email         VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     api_key_hash  VARCHAR(255) UNIQUE,          -- SHA-256 hash of the API key
-    api_key_prefix VARCHAR(10),                  -- e.g. "faya_live_" for display
+    api_key_prefix VARCHAR(10),                  -- e.g. "kadryza_live_" for display
     is_active     BOOLEAN DEFAULT true,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     updated_at    TIMESTAMPTZ DEFAULT NOW()

@@ -1,0 +1,576 @@
+---
+title: Vérification des webhooks
+description: Guide de sécurité — Vérifier les signatures HMAC-SHA256 des webhooks Kadryza
+---
+
+import { Callout, Tabs } from 'nextra/components'
+
+# Vérification des webhooks
+
+Ce guide est dédié à la **sécurité** de vos webhooks Kadryza.
+Il explique pourquoi la vérification est critique, comment fonctionne l'algorithme,
+et fournit des implémentations pour 6 frameworks différents.
+
+---
+
+## Pourquoi vérifier les signatures
+
+<Callout type="error" emoji="🚨">
+  **Sans vérification de signature, un attaquant peut simuler des paiements réussis.**
+</Callout>
+
+Votre endpoint webhook est une URL publique. N'importe qui peut envoyer une requête `POST`
+avec un payload qui ressemble à un webhook Kadryza légitime :
+
+```
+Scénario d'attaque SANS vérification :
+
+┌──────────────┐   POST { "event": "transaction.success" }   ┌──────────────┐
+│  Attaquant   │ ──────────────────────────────────────────▶ │  Votre       │
+│  (malveillant)│                                            │  serveur     │
+└──────────────┘                                             │              │
+                                                             │  ❌ Accepte   │
+                                                             │  le faux     │
+                                                             │  paiement    │
+                                                             └──────────────┘
+                    → La commande est marquée "payée"
+                    → Le produit est livré
+                    → Vous ne recevez jamais l'argent
+```
+
+```
+Scénario AVEC vérification :
+
+┌──────────────┐   POST { ... } (sans signature valide)     ┌──────────────┐
+│  Attaquant   │ ──────────────────────────────────────────▶ │  Votre       │
+│  (malveillant)│                                            │  serveur     │
+└──────────────┘                                             │              │
+                                                             │  ✅ Rejette   │
+                                                             │  → 401       │
+                                                             └──────────────┘
+                    → L'attaque échoue
+                    → Aucune commande frauduleuse
+```
+
+**Conséquences possibles sans vérification :**
+- Livraison de produits/services sans paiement réel
+- Manipulation de soldes dans votre base de données
+- Perte financière directe
+- Compromission de la confiance de vos clients
+
+---
+
+## Comment fonctionne la signature
+
+Kadryza utilise **HMAC-SHA256** pour signer chaque webhook.
+
+### Algorithme pas à pas
+
+```
+1. Kadryza prend le body JSON brut du webhook
+   Exemple : {"event":"transaction.success","data":{...},"timestamp":"..."}
+
+2. Kadryza calcule un HMAC-SHA256 avec votre secret webhook
+   HMAC-SHA256(secret, body_brut) → digest hexadécimal
+
+3. Le digest est préfixé par "sha256=" et placé dans le header
+   X-Kadryza-Signature: sha256=a1b2c3d4e5f6...
+
+4. Votre serveur reçoit le webhook :
+   a. Extraire le body brut (NON parsé)
+   b. Extraire le header X-Kadryza-Signature
+   c. Recalculer HMAC-SHA256(secret, body_brut)
+   d. Comparer les deux signatures (timing-safe)
+   e. Si elles correspondent → webhook authentique ✅
+      Sinon → webhook rejeté ❌
+```
+
+### Pourquoi « timing-safe » ?
+
+La comparaison classique de chaînes (`===`) s'arrête au premier caractère différent.
+Un attaquant pourrait mesurer le temps de réponse pour deviner la signature caractère par caractère
+(**timing attack**). La fonction `crypto.timingSafeEqual` compare toujours **tous les caractères**,
+rendant cette attaque impossible.
+
+```javascript
+// ❌ Vulnérable aux timing attacks
+if (signature === expectedSignature) { ... }
+
+// ✅ Résistant aux timing attacks
+crypto.timingSafeEqual(
+  Buffer.from(signature),
+  Buffer.from(expectedSignature)
+)
+```
+
+---
+
+## Implémentations par framework
+
+### SDK Kadryza (le plus simple)
+
+Le SDK fournit une méthode `verifySignature()` qui encapsule tout l'algorithme.
+
+```javascript filename="Avec le SDK"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+function verifier(payload, signature) {
+  return kadryza.webhooks.verifySignature({
+    payload,       // Body brut (string)
+    signature,     // Header X-Kadryza-Signature
+    secret: process.env.KADRYZA_WEBHOOK_SECRET
+  })
+}
+```
+
+---
+
+### Node.js `crypto` natif
+
+Pour ceux qui préfèrent éviter la dépendance au SDK pour le webhook handler.
+
+```javascript filename="verify-native.js"
+import crypto from 'crypto'
+
+function verifyWebhookSignature(payload, signature, secret) {
+  // Calculer le HMAC attendu
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex')
+
+  // Comparer en timing-safe
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    // Longueurs différentes → invalide
+    return false
+  }
+}
+```
+
+---
+
+### Next.js (App Router)
+
+```typescript filename="app/api/webhooks/kadryza/route.ts"
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+
+export async function POST(request: NextRequest) {
+  // IMPORTANT : text() et non json() — on a besoin du body brut
+  const payload = await request.text()
+  const signature = request.headers.get('x-kadryza-signature')
+
+  if (!signature) {
+    return NextResponse.json({ error: 'Signature manquante' }, { status: 400 })
+  }
+
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET!)
+    .update(payload)
+    .digest('hex')
+
+  let isValid = false
+  try {
+    isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    isValid = false
+  }
+
+  if (!isValid) {
+    return NextResponse.json({ error: 'Signature invalide' }, { status: 401 })
+  }
+
+  const event = JSON.parse(payload)
+  console.log('Webhook vérifié:', event.event, '—', event.data.reference)
+
+  // Traiter l'événement...
+
+  return NextResponse.json({ received: true })
+}
+```
+
+<Callout type="warning" emoji="⚠️">
+  **`request.text()`** — Dans l'App Router, utilisez `text()` pour obtenir le body brut.
+  `json()` parse le body et la recréation du string via `JSON.stringify()` peut modifier
+  l'ordre des clés ou l'espacement, ce qui **invalide** la signature.
+</Callout>
+
+---
+
+### Express.js
+
+```javascript filename="Express.js"
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+
+// IMPORTANT : express.raw() SPÉCIFIQUEMENT sur cette route
+// NE PAS utiliser express.json() comme middleware global si vous avez des webhooks
+app.post(
+  '/webhooks/kadryza',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const payload = req.body.toString()
+    const signature = req.headers['x-kadryza-signature']
+
+    if (!signature) {
+      return res.status(400).json({ error: 'Signature manquante' })
+    }
+
+    const expectedSignature = 'sha256=' + crypto
+      .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET)
+      .update(payload)
+      .digest('hex')
+
+    let isValid = false
+    try {
+      isValid = crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      )
+    } catch {
+      isValid = false
+    }
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Signature invalide' })
+    }
+
+    // Répondre 200 IMMÉDIATEMENT
+    res.status(200).json({ received: true })
+
+    // Traiter en arrière-plan
+    const event = JSON.parse(payload)
+    console.log('Webhook vérifié:', event.event)
+  }
+)
+```
+
+<Callout type="error" emoji="🚨">
+  **Piège Express.js n°1** — Si `express.json()` est appliqué en middleware global **avant** la route webhook,
+  le body est parsé et `req.body` devient un objet JavaScript. `req.body.toString()` retourne alors
+  `"[object Object]"` au lieu du JSON brut. **La signature échoue systématiquement.**
+  
+  **Solution** : montez la route webhook **avant** `express.json()`, ou utilisez `express.raw()` spécifiquement
+  sur cette route.
+</Callout>
+
+---
+
+### Fastify
+
+```typescript filename="Fastify"
+import Fastify from 'fastify'
+import crypto from 'crypto'
+
+const fastify = Fastify({
+  logger: true
+})
+
+// Configurer Fastify pour stocker le body brut
+fastify.addContentTypeParser(
+  'application/json',
+  { parseAs: 'string' },
+  (req, body, done) => {
+    done(null, body)
+  }
+)
+
+fastify.post('/webhooks/kadryza', async (request, reply) => {
+  const payload = request.body as string
+  const signature = request.headers['x-kadryza-signature'] as string
+
+  if (!signature) {
+    return reply.status(400).send({ error: 'Signature manquante' })
+  }
+
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET!)
+    .update(payload)
+    .digest('hex')
+
+  let isValid = false
+  try {
+    isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    isValid = false
+  }
+
+  if (!isValid) {
+    return reply.status(401).send({ error: 'Signature invalide' })
+  }
+
+  const event = JSON.parse(payload)
+  console.log('Webhook vérifié:', event.event, '—', event.data.reference)
+
+  // Traiter l'événement...
+
+  return { received: true }
+})
+
+fastify.listen({ port: 3000 })
+```
+
+<Callout type="info" emoji="💡">
+  Dans Fastify, le content type parser `parseAs: 'string'` stocke le body comme string brut
+  au lieu de le parser en objet. C'est l'équivalent de `express.raw()`.
+</Callout>
+
+---
+
+### Hono
+
+```typescript filename="Hono (Edge / Bun / Deno / Node)"
+import { Hono } from 'hono'
+import crypto from 'crypto'
+
+const app = new Hono()
+
+app.post('/webhooks/kadryza', async (c) => {
+  // Hono : c.req.text() retourne le body brut
+  const payload = await c.req.text()
+  const signature = c.req.header('x-kadryza-signature')
+
+  if (!signature) {
+    return c.json({ error: 'Signature manquante' }, 400)
+  }
+
+  // Pour les environnements Edge, utiliser Web Crypto API
+  const encoder = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(process.env.KADRYZA_WEBHOOK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+
+  const signatureBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(payload)
+  )
+
+  const expectedSignature = 'sha256=' + Array.from(new Uint8Array(signatureBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+
+  // Comparaison constant-time (Web Crypto n'a pas timingSafeEqual)
+  const sigBytes = new TextEncoder().encode(signature)
+  const expBytes = new TextEncoder().encode(expectedSignature)
+  if (sigBytes.length !== expBytes.length) {
+    return c.json({ error: 'Signature invalide' }, 401)
+  }
+  let diff = 0
+  for (let i = 0; i < sigBytes.length; i++) {
+    diff |= sigBytes[i] ^ expBytes[i]
+  }
+  if (diff !== 0) {
+    return c.json({ error: 'Signature invalide' }, 401)
+  }
+
+  const event = JSON.parse(payload)
+  console.log('Webhook vérifié:', event.event)
+
+  // Traiter l'événement...
+
+  return c.json({ received: true })
+})
+
+export default app
+```
+
+<Callout type="info" emoji="💡">
+  Hono fonctionne sur plusieurs runtimes (Node.js, Bun, Deno, Cloudflare Workers).
+  Pour les runtimes Edge qui n'ont pas le module `crypto` de Node.js,
+  utilisez la **Web Crypto API** (`crypto.subtle`) comme montré ci-dessus.
+</Callout>
+
+---
+
+## Idempotence avec X-Kadryza-Delivery-Id
+
+Chaque webhook Kadryza inclut un header `X-Kadryza-Delivery-Id` contenant un UUID unique
+pour cette livraison spécifique. Utilisez-le pour **dédupliquer** les événements.
+
+### Pourquoi c'est nécessaire
+
+Le même webhook peut arriver **plusieurs fois** :
+- Retry automatique après un timeout réseau
+- Double livraison en cas de race condition
+- Redémarrage de votre serveur pendant un traitement
+
+Sans idempotence, vous pourriez :
+- Mettre à jour une commande deux fois
+- Envoyer deux emails de confirmation
+- Créditer un compte deux fois
+
+### Implémentation
+
+```javascript filename="Idempotence webhook"
+import crypto from 'crypto'
+
+// Stockage des delivery IDs déjà traités
+// ⚠️ En production, utilisez Redis ou PostgreSQL (voir exemple Prisma ci-dessous)
+// Un Set en mémoire est perdu au redémarrage et croît indéfiniment.
+const processedDeliveries = new Map() // Map<deliveryId, timestamp>
+
+// Nettoyage périodique : supprimer les entrées de plus de 24h
+setInterval(() => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+  for (const [id, ts] of processedDeliveries) {
+    if (ts < cutoff) processedDeliveries.delete(id)
+  }
+}, 60 * 60 * 1000) // Toutes les heures
+
+function handleWebhook(req, res) {
+  const payload = req.body.toString()
+  const signature = req.headers['x-kadryza-signature']
+  const deliveryId = req.headers['x-kadryza-delivery-id']
+
+  // 1. Vérifier la signature
+  if (!verifySignature(payload, signature)) {
+    return res.status(401).json({ error: 'Signature invalide' })
+  }
+
+  // 2. Répondre 200 immédiatement
+  res.status(200).json({ received: true })
+
+  // 3. Vérifier si déjà traité
+  if (processedDeliveries.has(deliveryId)) {
+    console.log(`🔄 Webhook ${deliveryId} déjà traité — ignoré`)
+    return
+  }
+
+  // 4. Marquer comme traité AVANT de traiter
+  // (éviter les races si deux requêtes arrivent en même temps)
+  processedDeliveries.set(deliveryId, Date.now())
+
+  // 5. Traiter l'événement
+  const event = JSON.parse(payload)
+  processEvent(event)
+}
+```
+
+En production avec une base de données :
+
+```typescript filename="Idempotence avec Prisma"
+async function handleWebhookWithPrisma(deliveryId: string, event: KadryzaWebhookEvent) {
+  // INSERT ... ON CONFLICT DO NOTHING — atomique et sans race condition
+  // Retourne le nombre de lignes insérées (1 = nouveau, 0 = déjà existant)
+  const inserted = await prisma.$executeRaw`
+    INSERT INTO webhook_deliveries (id, event, reference, processed_at)
+    VALUES (${deliveryId}, ${event.event}, ${event.data.reference}, NOW())
+    ON CONFLICT (id) DO NOTHING
+  `
+
+  if (inserted === 0) {
+    console.log(`🔄 Delivery ${deliveryId} déjà traité`)
+    return
+  }
+
+  // Première réception — traiter l'événement
+  await processEvent(event)
+}
+```
+
+---
+
+## Checklist sécurité webhook
+
+Utilisez cette checklist pour auditer la sécurité de votre implémentation webhook.
+
+### ✅ Vérifications obligatoires
+
+| # | Vérification | Statut |
+|---|---|---|
+| 1 | Le header `X-Kadryza-Signature` est vérifié **avant** tout traitement | ☐ |
+| 2 | La comparaison de signature utilise `timingSafeEqual` (pas `===`) | ☐ |
+| 3 | Le body est lu **en brut** (`text()`, `express.raw()`, etc.) et non parsé | ☐ |
+| 4 | Le `KADRYZA_WEBHOOK_SECRET` est stocké dans une variable d'environnement, pas dans le code | ☐ |
+| 5 | Le secret webhook n'est **pas** commité dans Git | ☐ |
+| 6 | L'endpoint utilise **HTTPS** en production | ☐ |
+| 7 | L'endpoint retourne **200** en moins de 10 secondes | ☐ |
+| 8 | Le traitement de l'événement est fait **après** la réponse 200 | ☐ |
+| 9 | L'idempotence est gérée via `X-Kadryza-Delivery-Id` | ☐ |
+| 10 | Les webhooks sont **loggés** pour le débogage | ☐ |
+
+### ⚠️ Vérifications recommandées
+
+| # | Vérification | Statut |
+|---|---|---|
+| 11 | Les événements sont traités dans une queue asynchrone (Redis, SQS, etc.) | ☐ |
+| 12 | Un système d'alerte est en place si le webhook handler crash | ☐ |
+| 13 | Les retries manuels sont possibles depuis le dashboard | ☐ |
+| 14 | Le `Content-Type` de la requête est vérifié (`application/json`) | ☐ |
+| 15 | L'IP source est vérifiée (si Kadryza fournit une liste d'IPs fixes) | ☐ |
+
+---
+
+## Tester localement
+
+Pour tester les webhooks en développement, votre `localhost` doit être accessible depuis Internet.
+
+### Avec ngrok
+
+```bash filename="Terminal 1 — Démarrer votre serveur"
+npm run dev
+# ou
+node src/index.js
+```
+
+```bash filename="Terminal 2 — Exposer votre port"
+ngrok http 3000
+```
+
+Copiez l'URL ngrok (`https://xxxxx.ngrok-free.app`) et configurez-la dans le
+[dashboard Kadryza](https://dashboard.kadryza.app) → **Webhooks** → **Ajouter un endpoint** :
+
+```
+https://xxxxx.ngrok-free.app/webhooks/kadryza
+```
+
+### Tester avec curl (simuler un webhook)
+
+Pour tester votre implémentation sans passer par Kadryza, vous pouvez simuler un webhook
+en calculant vous-même la signature :
+
+```bash filename="Terminal — Générer un webhook de test"
+# Votre secret webhook
+SECRET="whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Le payload JSON
+PAYLOAD='{"event":"transaction.success","data":{"id":"test-uuid","reference":"test_001","internal_ref":"KADRYZA-TEST01","amount":5000,"currency":"XAF","operator":"AIRTEL","phone_number":"+23566000000","status":"SUCCESS","created_at":"2025-01-01T00:00:00Z","updated_at":"2025-01-01T00:01:00Z"},"timestamp":"2025-01-01T00:01:00Z"}'
+
+# Calculer la signature HMAC-SHA256
+SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')"
+
+# Envoyer le webhook simulé
+curl -X POST http://localhost:3000/webhooks/kadryza \
+  -H "Content-Type: application/json" \
+  -H "X-Kadryza-Signature: $SIGNATURE" \
+  -H "X-Kadryza-Delivery-Id: test-delivery-001" \
+  -d "$PAYLOAD"
+```
+
+<Callout type="info" emoji="💡">
+  Ce test vérifie que votre code de vérification de signature fonctionne correctement.
+  Si vous recevez `{ "received": true }`, votre implémentation est correcte.
+  Si vous recevez `{ "error": "Signature invalide" }`, vérifiez que le secret est correct.
+</Callout>

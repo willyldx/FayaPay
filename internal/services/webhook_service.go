@@ -18,11 +18,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"github.com/fayapay/faya-backend/internal/config"
-	db "github.com/fayapay/faya-backend/internal/db/sqlc"
-	"github.com/fayapay/faya-backend/internal/models"
-	"github.com/fayapay/faya-backend/internal/workers"
-	"github.com/fayapay/faya-backend/pkg/crypto"
+	"github.com/kadryza/kadryza-backend/internal/config"
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/models"
+	"github.com/kadryza/kadryza-backend/internal/workers"
+	"github.com/kadryza/kadryza-backend/pkg/crypto"
 )
 
 // =============================================================================
@@ -283,8 +283,8 @@ func (s *WebhookService) DeliverWebhook(ctx context.Context, taskPayload Webhook
 		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Faya-Signature", "sha256="+signature)
-	req.Header.Set("User-Agent", "FayaPay-Webhook/1.0")
+	req.Header.Set("X-Kadryza-Signature", "sha256="+signature)
+	req.Header.Set("User-Agent", "Kadryza-Webhook/1.0")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -354,9 +354,9 @@ func (s *WebhookService) TestEndpoint(ctx context.Context, merchantID, endpointI
 		return fmt.Errorf("creating test request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Faya-Signature", "sha256="+signature)
-	req.Header.Set("User-Agent", "FayaPay-Webhook/1.0")
-	req.Header.Set("X-Faya-Test", "true")
+	req.Header.Set("X-Kadryza-Signature", "sha256="+signature)
+	req.Header.Set("User-Agent", "Kadryza-Webhook/1.0")
+	req.Header.Set("X-Kadryza-Test", "true")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

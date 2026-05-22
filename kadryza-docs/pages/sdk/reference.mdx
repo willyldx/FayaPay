@@ -1,0 +1,593 @@
+---
+title: Référence SDK
+description: Référence complète des méthodes, types et erreurs du SDK @kadryza/sdk
+---
+
+import { Callout } from 'nextra/components'
+import { EndpointHeader } from '@/components/EndpointHeader'
+import { ParamTable } from '@/components/ParamTable'
+import { StatusBadge } from '@/components/StatusBadge'
+
+# Référence complète du SDK
+
+Documentation exhaustive de chaque méthode du SDK `@kadryza/sdk`,
+avec signatures TypeScript, paramètres détaillés, types de retour et erreurs possibles.
+
+---
+
+## Classe `Kadryza`
+
+### Constructeur
+
+```typescript filename="Signature"
+new Kadryza(config: KadryzaConfig): Kadryza
+```
+
+<ParamTable params={[
+  { name: 'apiKey', type: 'string', required: true, description: 'Clé API au format kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+  { name: 'baseUrl', type: 'string', required: false, description: 'URL de base de l\'API Kadryza', default: 'https://api.kadryza.app' },
+  { name: 'timeout', type: 'number', required: false, description: 'Timeout des requêtes HTTP en millisecondes', default: '30000' },
+  { name: 'maxRetries', type: 'number', required: false, description: 'Nombre de retries automatiques pour les erreurs réseau', default: '0' }
+]} />
+
+```javascript filename="Exemple"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY,
+  timeout: 15000,
+  maxRetries: 2
+})
+```
+
+### Propriétés
+
+| Propriété | Type | Description |
+|-----------|------|-------------|
+| `transactions` | `TransactionsClient` | Client pour gérer les transactions |
+| `webhooks` | `WebhooksClient` | Client pour vérifier les signatures webhook |
+
+---
+
+## `kadryza.transactions.initiate()`
+
+Initie une nouvelle transaction de paiement Mobile Money.
+
+### Signature
+
+```typescript filename="Signature TypeScript"
+kadryza.transactions.initiate(params: InitiateTransactionParams): Promise<Transaction>
+```
+
+### Paramètres (`InitiateTransactionParams`)
+
+<ParamTable params={[
+  { name: 'reference', type: 'string', required: true, description: 'Référence unique de votre commande. Sert de clé d\'idempotence.' },
+  { name: 'amount', type: 'number', required: true, description: 'Montant en XAF. Entier positif, pas de décimales.' },
+  { name: 'currency', type: 'string', required: true, description: 'Devise du paiement. Seule valeur : "XAF".' },
+  { name: 'operator', type: 'string', required: true, description: 'Opérateur Mobile Money : "AIRTEL" ou "MOOV".' },
+  { name: 'phone_number', type: 'string', required: true, description: 'Numéro au format international : +235XXXXXXXX.' },
+  { name: 'description', type: 'string', required: false, description: 'Description du paiement. Max 255 caractères.' }
+]} />
+
+### Type de retour (`Transaction`)
+
+```typescript filename="Type Transaction"
+interface Transaction {
+  /** UUID unique de la transaction Kadryza */
+  id: string
+
+  /** Votre référence de commande (clé d'idempotence) */
+  reference: string
+
+  /** Référence interne Kadryza au format KADRYZA-XXXXXXXX */
+  internal_ref: string
+
+  /** Montant en XAF (entier) */
+  amount: number
+
+  /** Devise — toujours "XAF" */
+  currency: 'XAF'
+
+  /** Opérateur Mobile Money */
+  operator: 'AIRTEL' | 'MOOV'
+
+  /** Numéro de téléphone du payeur */
+  phone_number: string
+
+  /** Description du paiement */
+  description: string | null
+
+  /** Statut actuel de la transaction */
+  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'EXPIRED'
+
+  /** Date de création (ISO 8601) */
+  created_at: string
+
+  /** Date de dernière mise à jour (ISO 8601) */
+  updated_at: string
+
+  /** Date d'expiration de la transaction (ISO 8601) */
+  expires_at: string
+}
+```
+
+### Erreurs possibles
+
+| Classe d'erreur | Code | Quand |
+|-----------------|------|-------|
+| `KadryzaAuthError` | `UNAUTHORIZED` | Clé API invalide ou révoquée |
+| `KadryzaValidationError` | `VALIDATION_ERROR` | Paramètres manquants ou invalides |
+| `KadryzaDuplicateError` | `DUPLICATE_REFERENCE` | `reference` déjà utilisée (idempotence) |
+| `KadryzaGatewayUnavailableError` | `GATEWAY_UNAVAILABLE` | Passerelle Mobile Money temporairement hors ligne |
+| `KadryzaNetworkError` | `NETWORK_ERROR` | Impossible de joindre l'API |
+
+### Exemple complet
+
+```javascript filename="initiate-example.js"
+import Kadryza, {
+  KadryzaValidationError,
+  KadryzaDuplicateError,
+  KadryzaGatewayUnavailableError
+} from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+try {
+  const transaction = await kadryza.transactions.initiate({
+    reference: 'cmd_2025_456',
+    amount: 25000,
+    currency: 'XAF',
+    operator: 'MOOV',
+    phone_number: '+23599000000',
+    description: 'Achat forfait internet 20Go'
+  })
+
+  console.log('Transaction créée :', transaction.id)
+  console.log('Référence interne :', transaction.internal_ref)
+  console.log('Statut :', transaction.status)        // "PENDING"
+  console.log('Expire à :', transaction.expires_at)
+
+} catch (error) {
+  if (error instanceof KadryzaValidationError) {
+    console.error('Paramètres invalides :')
+    for (const [champ, msg] of Object.entries(error.fields)) {
+      console.error(`  ${champ}: ${msg}`)
+    }
+  } else if (error instanceof KadryzaDuplicateError) {
+    console.log('Transaction déjà existante — idempotence activée')
+  } else if (error instanceof KadryzaGatewayUnavailableError) {
+    console.error('Passerelle indisponible — réessayez plus tard')
+  } else {
+    throw error
+  }
+}
+```
+
+---
+
+## `kadryza.transactions.get()`
+
+Récupère les détails complets d'une transaction par son UUID.
+
+### Signature
+
+```typescript filename="Signature TypeScript"
+kadryza.transactions.get(id: string): Promise<Transaction>
+```
+
+### Paramètres
+
+<ParamTable params={[
+  { name: 'id', type: 'string', required: true, description: 'UUID de la transaction retourné par initiate() ou reçu via webhook.' }
+]} />
+
+### Type de retour
+
+Retourne un objet `Transaction` (même type que `initiate()`).
+
+### Erreurs possibles
+
+| Classe d'erreur | Code | Quand |
+|-----------------|------|-------|
+| `KadryzaAuthError` | `UNAUTHORIZED` | Clé API invalide |
+| `KadryzaNotFoundError` | `NOT_FOUND` | UUID inexistant ou appartenant à un autre merchant |
+| `KadryzaNetworkError` | `NETWORK_ERROR` | Impossible de joindre l'API |
+
+### Exemple complet
+
+```javascript filename="get-example.js"
+import Kadryza, { KadryzaNotFoundError } from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+try {
+  const transaction = await kadryza.transactions.get(
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+  )
+
+  console.log('Référence :', transaction.reference)
+  console.log('Montant :', transaction.amount, 'XAF')
+  console.log('Opérateur :', transaction.operator)
+  console.log('Statut :', transaction.status)
+
+  // Vérifier le statut
+  switch (transaction.status) {
+    case 'PENDING':
+      console.log('⏳ En attente de confirmation du payeur')
+      break
+    case 'SUCCESS':
+      console.log('✅ Paiement confirmé')
+      break
+    case 'FAILED':
+      console.log('❌ Paiement refusé')
+      break
+    case 'TIMEOUT':
+      console.log('⏰ Paiement expiré')
+      break
+    case 'EXPIRED':
+      console.log('💀 Transaction expirée côté passerelle')
+      break
+  }
+
+} catch (error) {
+  if (error instanceof KadryzaNotFoundError) {
+    console.error('Transaction introuvable — vérifiez l\'UUID')
+  } else {
+    throw error
+  }
+}
+```
+
+---
+
+## `kadryza.transactions.list()`
+
+Liste paginée de vos transactions avec filtres optionnels.
+
+### Signature
+
+```typescript filename="Signature TypeScript"
+kadryza.transactions.list(filters?: ListTransactionsParams): Promise<PaginatedResult<Transaction>>
+```
+
+### Paramètres (`ListTransactionsParams`)
+
+<ParamTable params={[
+  { name: 'page', type: 'number', required: false, description: 'Numéro de la page', default: '1' },
+  { name: 'per_page', type: 'number', required: false, description: 'Résultats par page (max 100)', default: '20' },
+  { name: 'status', type: 'string', required: false, description: 'Filtrer par statut : "PENDING", "SUCCESS", "FAILED", "TIMEOUT", "EXPIRED"' },
+  { name: 'operator', type: 'string', required: false, description: 'Filtrer par opérateur : "AIRTEL", "MOOV"' },
+  { name: 'from', type: 'string', required: false, description: 'Date de début (ISO 8601). Exemple : "2025-01-01T00:00:00Z"' },
+  { name: 'to', type: 'string', required: false, description: 'Date de fin (ISO 8601). Exemple : "2025-12-31T23:59:59Z"' }
+]} />
+
+### Type de retour (`PaginatedResult<Transaction>`)
+
+```typescript filename="Type PaginatedResult"
+interface PaginatedResult<T> {
+  /** Tableau des résultats */
+  data: T[]
+
+  /** Informations de pagination */
+  pagination: {
+    /** Page actuelle */
+    page: number
+
+    /** Nombre de résultats par page */
+    per_page: number
+
+    /** Nombre total de résultats */
+    total: number
+
+    /** Nombre total de pages */
+    total_pages: number
+  }
+}
+```
+
+### Erreurs possibles
+
+| Classe d'erreur | Code | Quand |
+|-----------------|------|-------|
+| `KadryzaAuthError` | `UNAUTHORIZED` | Clé API invalide |
+| `KadryzaValidationError` | `VALIDATION_ERROR` | Paramètre de filtre invalide |
+| `KadryzaNetworkError` | `NETWORK_ERROR` | Impossible de joindre l'API |
+
+### Exemple complet
+
+```javascript filename="list-example.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+// Lister toutes les transactions (paramètres par défaut)
+const all = await kadryza.transactions.list()
+console.log(`Total : ${all.pagination.total} transactions`)
+
+// Filtrer : transactions réussies via Airtel en juin 2025
+const filtered = await kadryza.transactions.list({
+  status: 'SUCCESS',
+  operator: 'AIRTEL',
+  from: '2025-06-01T00:00:00Z',
+  to: '2025-06-30T23:59:59Z',
+  per_page: 100
+})
+
+console.log(`${filtered.pagination.total} transactions réussies via Airtel en juin 2025`)
+
+for (const tx of filtered.data) {
+  console.log(`  ${tx.reference} — ${tx.amount} XAF — ${tx.internal_ref}`)
+}
+
+// Pagination manuelle
+async function toutesLesTransactions() {
+  const transactions = []
+  let page = 1
+  let totalPages = 1
+
+  while (page <= totalPages) {
+    const result = await kadryza.transactions.list({ page, per_page: 100 })
+    transactions.push(...result.data)
+    totalPages = result.pagination.total_pages
+    page++
+  }
+
+  console.log(`${transactions.length} transactions récupérées au total`)
+  return transactions
+}
+
+const toutes = await toutesLesTransactions()
+```
+
+---
+
+## `kadryza.webhooks.verifySignature()`
+
+Vérifie l'authenticité d'un webhook en validant sa signature HMAC-SHA256.
+
+### Signature
+
+```typescript filename="Signature TypeScript"
+kadryza.webhooks.verifySignature(params: VerifySignatureParams): boolean
+```
+
+### Paramètres (`VerifySignatureParams`)
+
+<ParamTable params={[
+  { name: 'payload', type: 'string', required: true, description: 'Body brut du webhook (string, pas un objet parsé). Utiliser req.body.toString() avec express.raw().' },
+  { name: 'signature', type: 'string', required: true, description: 'Valeur du header X-Kadryza-Signature (format : sha256=<hex>).' },
+  { name: 'secret', type: 'string', required: true, description: 'Secret de signature webhook obtenu dans le dashboard.' }
+]} />
+
+### Type de retour
+
+| Retour | Signification |
+|--------|---------------|
+| `true` | La signature est valide — le webhook est authentique |
+| `false` | La signature est invalide — **ne pas traiter le webhook** |
+
+### Erreurs possibles
+
+Cette méthode ne lève **aucune exception**. Elle retourne toujours `true` ou `false`.
+
+### Exemple complet
+
+```javascript filename="verify-example.js"
+import Kadryza from '@kadryza/sdk'
+import express from 'express'
+
+const app = express()
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+app.post(
+  '/webhooks/kadryza',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const isValid = kadryza.webhooks.verifySignature({
+      payload: req.body.toString(),
+      signature: req.headers['x-kadryza-signature'],
+      secret: process.env.KADRYZA_WEBHOOK_SECRET
+    })
+
+    if (!isValid) {
+      console.error('❌ Signature invalide')
+      return res.status(401).json({ error: 'Signature invalide' })
+    }
+
+    // ✅ Signature valide — traiter l'événement
+    res.status(200).json({ received: true })
+
+    const event = JSON.parse(req.body.toString())
+    console.log('Événement :', event.event)
+    console.log('Transaction :', event.data.reference)
+    console.log('Montant :', event.data.amount, 'XAF')
+  }
+)
+
+app.listen(3000)
+```
+
+<Callout type="warning" emoji="⚠️">
+  **Piège Express.js** — Le paramètre `payload` doit être le body **brut** (string),
+  pas un objet parsé par `express.json()`. Utilisez `express.raw({ type: 'application/json' })`
+  sur votre route webhook.
+</Callout>
+
+---
+
+## Types TypeScript
+
+### Types d'entrée
+
+```typescript filename="types/input.d.ts"
+/** Paramètres pour initier une transaction */
+interface InitiateTransactionParams {
+  reference: string
+  amount: number
+  currency: 'XAF'
+  operator: 'AIRTEL' | 'MOOV'
+  phone_number: string
+  description?: string
+}
+
+/** Paramètres pour lister les transactions */
+interface ListTransactionsParams {
+  page?: number
+  per_page?: number
+  status?: 'PENDING' | 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'EXPIRED'
+  operator?: 'AIRTEL' | 'MOOV'
+  from?: string
+  to?: string
+}
+
+/** Paramètres pour vérifier une signature webhook */
+interface VerifySignatureParams {
+  payload: string
+  signature: string
+  secret: string
+}
+```
+
+### Types de sortie
+
+```typescript filename="types/output.d.ts"
+/** Transaction Kadryza */
+interface Transaction {
+  id: string
+  reference: string
+  internal_ref: string
+  amount: number
+  currency: 'XAF'
+  operator: 'AIRTEL' | 'MOOV'
+  phone_number: string
+  description: string | null
+  status: TransactionStatus
+  created_at: string
+  updated_at: string
+  expires_at: string
+}
+
+/** Statuts possibles d'une transaction */
+type TransactionStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'EXPIRED'
+
+/** Résultat paginé */
+interface PaginatedResult<T> {
+  data: T[]
+  pagination: {
+    page: number
+    per_page: number
+    total: number
+    total_pages: number
+  }
+}
+```
+
+### Types d'erreur
+
+```typescript filename="types/errors.d.ts"
+/** Classe de base pour toutes les erreurs Kadryza */
+declare class KadryzaError extends Error {
+  /** Code d'erreur machine-readable */
+  code: string
+  /** Message humain-readable */
+  message: string
+  /** Code HTTP de la réponse (absent pour KadryzaNetworkError) */
+  status?: number
+}
+
+/** 401 — Clé API invalide ou révoquée */
+declare class KadryzaAuthError extends KadryzaError {
+  code: 'UNAUTHORIZED'
+  status: 401
+}
+
+/** 400 / 422 — Paramètres invalides */
+declare class KadryzaValidationError extends KadryzaError {
+  code: 'VALIDATION_ERROR'
+  status: 400 | 422
+  /** Détail des champs en erreur */
+  fields: Record<string, string>
+}
+
+/** 404 — Ressource introuvable */
+declare class KadryzaNotFoundError extends KadryzaError {
+  code: 'NOT_FOUND'
+  status: 404
+}
+
+/** 409 — Référence déjà utilisée (idempotence) */
+declare class KadryzaDuplicateError extends KadryzaError {
+  code: 'DUPLICATE_REFERENCE'
+  status: 409
+  /** UUID de la transaction existante */
+  existing_transaction_id: string
+}
+
+/** Erreur réseau (timeout, DNS, connexion refusée) */
+declare class KadryzaNetworkError extends KadryzaError {
+  code: 'NETWORK_ERROR'
+}
+
+/** 503 — Passerelle Mobile Money indisponible */
+declare class KadryzaGatewayUnavailableError extends KadryzaError {
+  code: 'GATEWAY_UNAVAILABLE'
+  status: 503
+  /** Délai recommandé avant retry (en secondes) */
+  retry_after?: number
+}
+```
+
+---
+
+## Imports
+
+Le SDK exporte la classe principale et toutes les classes d'erreur :
+
+```javascript filename="Tous les exports"
+import Kadryza, {
+  // Classe de base
+  KadryzaError,
+
+  // Classes d'erreur spécifiques
+  KadryzaAuthError,
+  KadryzaValidationError,
+  KadryzaNotFoundError,
+  KadryzaDuplicateError,
+  KadryzaNetworkError,
+  KadryzaGatewayUnavailableError
+} from '@kadryza/sdk'
+```
+
+Pour un `catch` simplifié, importez uniquement la classe de base :
+
+```javascript filename="Import minimal"
+import Kadryza, { KadryzaError } from '@kadryza/sdk'
+
+try {
+  const tx = await kadryza.transactions.initiate({ /* ... */ })
+} catch (error) {
+  if (error instanceof KadryzaError) {
+    console.error(`[${error.code}] ${error.message}`)
+  }
+}
+```
+
+---
+
+## Récapitulatif des méthodes
+
+| Méthode | Paramètres | Retour | Endpoint REST |
+|---------|------------|--------|---------------|
+| `kadryza.transactions.initiate(params)` | `InitiateTransactionParams` | `Promise<Transaction>` | `POST /v1/transactions` |
+| `kadryza.transactions.get(id)` | `string` (UUID) | `Promise<Transaction>` | `GET /v1/transactions/:id` |
+| `kadryza.transactions.list(filters?)` | `ListTransactionsParams?` | `Promise<PaginatedResult<Transaction>>` | `GET /v1/transactions` |
+| `kadryza.webhooks.verifySignature(params)` | `VerifySignatureParams` | `boolean` | — (côté client) |

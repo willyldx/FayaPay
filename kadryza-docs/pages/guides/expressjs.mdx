@@ -1,0 +1,586 @@
+---
+title: Intégration Express.js
+description: Guide complet pour intégrer Kadryza dans une application Express.js
+---
+
+import { Callout, Steps } from 'nextra/components'
+import { EndpointHeader } from '@/components/EndpointHeader'
+
+# Intégration Express.js
+
+Ce guide vous montre comment intégrer Kadryza dans une application **Express.js**
+avec une architecture propre utilisant des routeurs, un middleware de logging,
+et une gestion des webhooks sécurisée.
+
+---
+
+<Steps>
+
+### Installation et configuration
+
+Installez les dépendances nécessaires :
+
+```bash filename="Terminal"
+npm install express @kadryza/sdk dotenv
+npm install -D @types/express typescript ts-node
+```
+
+Créez un fichier `.env` à la racine :
+
+```bash filename=".env"
+# Port du serveur
+PORT=3000
+
+# Clé API Kadryza
+KADRYZA_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Secret webhook
+KADRYZA_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+<Callout type="error" emoji="🔐">
+  Ajoutez `.env` dans votre `.gitignore`. Ne commitez **jamais** vos clés API.
+</Callout>
+
+Créez le fichier d'initialisation du client Kadryza :
+
+```typescript filename="src/lib/kadryza.ts"
+import Kadryza from '@kadryza/sdk'
+import 'dotenv/config'
+
+if (!process.env.KADRYZA_API_KEY) {
+  console.error('❌ Variable KADRYZA_API_KEY manquante dans .env')
+  process.exit(1)
+}
+
+export const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+```
+
+---
+
+### Middleware de logging des transactions
+
+Créez un middleware qui log chaque requête de paiement avec les métadonnées pertinentes.
+Utile pour le monitoring et le débogage en production.
+
+```typescript filename="src/middleware/transactionLogger.ts"
+import { Request, Response, NextFunction } from 'express'
+
+interface TransactionLog {
+  timestamp: string
+  method: string
+  path: string
+  ip: string
+  userAgent: string
+  body?: Record<string, unknown>
+  responseStatus?: number
+  duration?: number
+}
+
+export function transactionLogger(req: Request, res: Response, next: NextFunction) {
+  const start = Date.now()
+
+  const log: TransactionLog = {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    path: req.originalUrl,
+    ip: req.ip || req.socket.remoteAddress || 'unknown',
+    userAgent: req.get('user-agent') || 'unknown'
+  }
+
+  // Logger le body pour les requêtes POST (sans les données sensibles)
+  if (req.method === 'POST' && req.is('application/json')) {
+    const sanitizedBody = { ...req.body }
+    // Masquer le numéro de téléphone dans les logs
+    if (sanitizedBody.phoneNumber) {
+      sanitizedBody.phoneNumber = sanitizedBody.phoneNumber.slice(0, 7) + '****'
+    }
+    log.body = sanitizedBody
+  }
+
+  // Intercepter la réponse pour logger le status code
+  const originalJson = res.json.bind(res)
+  res.json = (data: unknown) => {
+    log.responseStatus = res.statusCode
+    log.duration = Date.now() - start
+
+    const emoji = res.statusCode < 400 ? '✅' : '❌'
+    console.log(
+      `${emoji} [${log.timestamp}] ${log.method} ${log.path} → ${log.responseStatus} (${log.duration}ms)`
+    )
+
+    if (res.statusCode >= 400) {
+      console.log('   Body:', JSON.stringify(log.body))
+      console.log('   IP:', log.ip)
+    }
+
+    return originalJson(data)
+  }
+
+  next()
+}
+```
+
+---
+
+### Endpoint POST /pay — Initier un paiement
+
+<EndpointHeader
+  method="POST"
+  path="/pay"
+  description="Reçoit les demandes de paiement de votre frontend et initie une transaction via Kadryza"
+/>
+
+```typescript filename="src/routes/payment.ts"
+import { Router, Request, Response } from 'express'
+import { kadryza } from '../lib/kadryza'
+import {
+  KadryzaValidationError,
+  KadryzaDuplicateError,
+  KadryzaGatewayUnavailableError
+} from '@kadryza/sdk'
+
+const router = Router()
+
+interface PaymentBody {
+  orderId: string
+  amount: number
+  operator: 'AIRTEL' | 'MOOV'
+  phoneNumber: string
+  description?: string
+}
+
+router.post('/pay', async (req: Request<object, unknown, PaymentBody>, res: Response) => {
+  const { orderId, amount, operator, phoneNumber, description } = req.body
+
+  // Validation des champs requis
+  if (!orderId || !amount || !operator || !phoneNumber) {
+    return res.status(400).json({
+      error: 'Champs requis manquants',
+      required: ['orderId', 'amount', 'operator', 'phoneNumber']
+    })
+  }
+
+  // Validation du montant (entier positif en XAF)
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({
+      error: 'Le montant doit être un entier positif en XAF'
+    })
+  }
+
+  // Validation de l'opérateur
+  if (!['AIRTEL', 'MOOV'].includes(operator)) {
+    return res.status(400).json({
+      error: 'Opérateur invalide. Valeurs acceptées : AIRTEL, MOOV'
+    })
+  }
+
+  // Validation du numéro de téléphone
+  if (!/^\+235\d{8}$/.test(phoneNumber)) {
+    return res.status(400).json({
+      error: 'Format de numéro invalide. Attendu : +235XXXXXXXX (8 chiffres après +235)'
+    })
+  }
+
+  try {
+    const transaction = await kadryza.transactions.initiate({
+      reference: orderId,
+      amount,
+      currency: 'XAF',
+      operator,
+      phone_number: phoneNumber,
+      description: description || `Paiement commande #${orderId}`
+    })
+
+    console.log(`💳 Transaction créée : ${transaction.internal_ref} — ${amount} XAF via ${operator}`)
+
+    return res.status(201).json({
+      success: true,
+      transaction: {
+        id: transaction.id,
+        internalRef: transaction.internal_ref,
+        status: transaction.status,
+        amount: transaction.amount,
+        operator: transaction.operator,
+        expiresAt: transaction.expires_at
+      }
+    })
+
+  } catch (error) {
+    if (error instanceof KadryzaValidationError) {
+      return res.status(422).json({
+        error: 'Données de paiement invalides',
+        details: error.fields
+      })
+    }
+
+    if (error instanceof KadryzaDuplicateError) {
+      // Idempotence : la transaction existe déjà
+      return res.status(200).json({
+        success: true,
+        message: 'Transaction déjà existante (idempotence)',
+        existingTransactionId: error.existing_transaction_id
+      })
+    }
+
+    if (error instanceof KadryzaGatewayUnavailableError) {
+      return res.status(503).json({
+        error: 'Le service de paiement est temporairement indisponible',
+        retryAfter: error.retry_after || 60
+      })
+    }
+
+    console.error('Erreur inattendue:', error)
+    return res.status(500).json({ error: 'Erreur interne du serveur' })
+  }
+})
+
+// Endpoint GET pour vérifier le statut d'une transaction
+// ⚠️ Sécurité : en production, protégez cette route avec un middleware
+// d'authentification (session, JWT, etc.) pour éviter qu'un tiers
+// consulte le statut de transactions qui ne lui appartiennent pas.
+router.get('/pay/:id', async (req: Request, res: Response) => {
+  try {
+    const transaction = await kadryza.transactions.get(req.params.id)
+
+    return res.status(200).json({
+      id: transaction.id,
+      reference: transaction.reference,
+      internalRef: transaction.internal_ref,
+      status: transaction.status,
+      amount: transaction.amount,
+      operator: transaction.operator,
+      updatedAt: transaction.updated_at
+    })
+  } catch {
+    return res.status(404).json({ error: 'Transaction introuvable' })
+  }
+})
+
+export default router
+```
+
+---
+
+### Endpoint POST /webhooks/kadryza — Recevoir les webhooks
+
+<EndpointHeader
+  method="POST"
+  path="/webhooks/kadryza"
+  description="Reçoit et vérifie les notifications de paiement en temps réel"
+/>
+
+<Callout type="error" emoji="⚠️">
+  **`express.raw()` est OBLIGATOIRE** sur la route webhook.
+  Si vous utilisez `express.json()` en middleware global, il parse le body
+  avant votre handler. Le body brut est alors perdu et la vérification
+  de signature **échoue systématiquement**.
+</Callout>
+
+```typescript filename="src/routes/webhook.ts"
+import { Router, Request, Response } from 'express'
+import crypto from 'crypto'
+
+const router = Router()
+
+interface KadryzaWebhookEvent {
+  event: 'transaction.success' | 'transaction.failed' | 'transaction.timeout'
+  data: {
+    id: string
+    reference: string
+    internal_ref: string
+    amount: number
+    currency: string
+    operator: string
+    phone_number: string
+    description: string | null
+    status: string
+    created_at: string
+    updated_at: string
+  }
+  timestamp: string
+}
+
+// IMPORTANT : express.raw() DOIT être appliqué AVANT le handler
+// Ne PAS utiliser express.json() sur cette route
+router.post(
+  '/webhooks/kadryza',
+  // Middleware express.raw() spécifique à cette route
+  (req: Request, res: Response, next) => {
+    // Vérifier que le Content-Type est correct
+    if (!req.is('application/json')) {
+      return res.status(415).json({ error: 'Content-Type doit être application/json' })
+    }
+
+    // Collecter le body brut manuellement
+    let rawBody = ''
+    req.setEncoding('utf8')
+    req.on('data', (chunk: string) => { rawBody += chunk })
+    req.on('end', () => {
+      ;(req as Request & { rawBody: string }).rawBody = rawBody
+      next()
+    })
+  },
+  (req: Request, res: Response) => {
+    const rawBody = (req as Request & { rawBody: string }).rawBody
+    const signature = req.headers['x-kadryza-signature'] as string | undefined
+    const deliveryId = req.headers['x-kadryza-delivery-id'] as string | undefined
+
+    // 1. Vérifier la présence de la signature
+    if (!signature) {
+      console.error('❌ Webhook reçu sans signature')
+      return res.status(400).json({ error: 'Header X-Kadryza-Signature manquant' })
+    }
+
+    // 2. Calculer le HMAC attendu
+    const expectedSignature = 'sha256=' + crypto
+      .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET!)
+      .update(rawBody)
+      .digest('hex')
+
+    // 3. Comparer avec timing-safe
+    let isValid = false
+    try {
+      isValid = crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      )
+    } catch {
+      isValid = false
+    }
+
+    if (!isValid) {
+      console.error('❌ Signature webhook invalide')
+      return res.status(401).json({ error: 'Signature invalide' })
+    }
+
+    // 4. Répondre 200 IMMÉDIATEMENT
+    res.status(200).json({ received: true })
+
+    // 5. Parser et traiter l'événement en arrière-plan
+    const event: KadryzaWebhookEvent = JSON.parse(rawBody)
+
+    console.log(`🔔 Webhook [${event.event}] — ref: ${event.data.reference} — ${event.data.amount} XAF`)
+    console.log(`   Delivery ID: ${deliveryId}`)
+
+    // 6. Traiter selon le type
+    switch (event.event) {
+      case 'transaction.success':
+        console.log(`   ✅ Paiement confirmé via ${event.data.operator}`)
+        // TODO: Mettre à jour la commande dans votre BDD
+        // db.orders.update({ reference: event.data.reference }, { status: 'PAID', paidAt: event.timestamp })
+        // Envoyer email de confirmation, démarrer livraison, etc.
+        break
+
+      case 'transaction.failed':
+        console.log(`   ❌ Paiement refusé`)
+        // TODO: Mettre à jour la commande
+        // db.orders.update({ reference: event.data.reference }, { status: 'PAYMENT_FAILED' })
+        // Notifier le client, proposer un autre moyen de paiement
+        break
+
+      case 'transaction.timeout':
+        console.log(`   ⏰ Paiement expiré après 5 minutes`)
+        // TODO: Mettre à jour la commande
+        // db.orders.update({ reference: event.data.reference }, { status: 'PAYMENT_EXPIRED' })
+        // Proposer de réessayer
+        break
+
+      default:
+        console.log(`   ⚠️ Événement inconnu: ${event.event}`)
+    }
+  }
+)
+
+export default router
+```
+
+---
+
+### Assemblage — Serveur complet
+
+Assemblez tous les composants dans le fichier principal :
+
+```typescript filename="src/index.ts"
+import express from 'express'
+import 'dotenv/config'
+import paymentRouter from './routes/payment'
+import webhookRouter from './routes/webhook'
+import { transactionLogger } from './middleware/transactionLogger'
+
+const app = express()
+const PORT = process.env.PORT || 3000
+
+// ─── Middleware global ──────────────────────────────────────
+// IMPORTANT : NE PAS appliquer express.json() globalement
+// car cela casse la vérification de signature des webhooks.
+// Appliquer express.json() uniquement sur les routes qui en ont besoin.
+
+// Middleware CORS (si votre frontend est sur un domaine différent)
+if (!process.env.FRONTEND_URL) {
+  console.warn('⚠️  Variable FRONTEND_URL manquante — CORS désactivé par défaut')
+}
+app.use((req, res, next) => {
+  if (process.env.FRONTEND_URL) {
+    res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL)
+  }
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
+  next()
+})
+
+// ─── Routes webhook (AVANT express.json()) ──────────────────
+// Le webhook handler gère son propre parsing du body brut
+app.use('/', webhookRouter)
+
+// ─── Middleware JSON pour les autres routes ──────────────────
+app.use(express.json())
+
+// ─── Middleware de logging ───────────────────────────────────
+app.use('/pay', transactionLogger)
+
+// ─── Routes de paiement ─────────────────────────────────────
+app.use('/', paymentRouter)
+
+// ─── Health check ───────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'kadryza-payment-server',
+    timestamp: new Date().toISOString()
+  })
+})
+
+// ─── Démarrage ──────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log('')
+  console.log('╔═══════════════════════════════════════════════════╗')
+  console.log('║     🚀 Serveur Kadryza Payment démarré           ║')
+  console.log(`║     📡 Port: ${String(PORT).padEnd(38)}║`)
+  console.log('║     💳 POST /pay         — Initier un paiement   ║')
+  console.log('║     📋 GET  /pay/:id     — Vérifier le statut    ║')
+  console.log('║     🔔 POST /webhooks/kadryza — Webhooks         ║')
+  console.log('║     ❤️  GET  /health     — Health check           ║')
+  console.log('╚═══════════════════════════════════════════════════╝')
+  console.log('')
+})
+
+export default app
+```
+
+</Steps>
+
+---
+
+## Structure de fichiers finale
+
+```
+src/
+├── index.ts                      ← Point d'entrée du serveur
+├── lib/
+│   └── kadryza.ts                ← Client SDK singleton
+├── routes/
+│   ├── payment.ts                ← POST /pay + GET /pay/:id
+│   └── webhook.ts                ← POST /webhooks/kadryza
+└── middleware/
+    └── transactionLogger.ts      ← Logging des transactions
+.env                              ← Secrets (non commité)
+package.json
+tsconfig.json
+```
+
+---
+
+## Tester l'intégration
+
+```bash filename="Terminal — Démarrer le serveur"
+npx ts-node src/index.ts
+```
+
+```bash filename="Terminal — Tester un paiement"
+curl -X POST http://localhost:3000/pay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orderId": "test_001",
+    "amount": 5000,
+    "operator": "AIRTEL",
+    "phoneNumber": "+23566000000",
+    "description": "Test intégration Express.js"
+  }'
+```
+
+```bash filename="Terminal — Vérifier le statut"
+curl http://localhost:3000/pay/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+```bash filename="Terminal — Tester le health check"
+curl http://localhost:3000/health
+```
+
+Pour tester les webhooks en local, utilisez [ngrok](/guides/webhook-verification#tester-localement) :
+
+```bash filename="Terminal"
+ngrok http 3000
+# Puis configurez l'URL ngrok dans le dashboard Kadryza :
+# https://xxxxx.ngrok-free.app/webhooks/kadryza
+```
+
+---
+
+## Points d'attention importants
+
+<Callout type="warning" emoji="📌">
+  **Ordre des middlewares** — Le webhook router DOIT être monté **avant** `express.json()`.
+  Sinon le body est parsé et la vérification de signature échoue.
+</Callout>
+
+<Callout type="warning" emoji="📌">
+  **Réponse 200 immédiate** — Répondez HTTP 200 **avant** de traiter l'événement webhook.
+  Kadryza attend une réponse en moins de 10 secondes. Au-delà, il considère la livraison comme échouée
+  et relance un retry.
+</Callout>
+
+<Callout type="warning" emoji="📌">
+  **Montants entiers** — Les montants sont toujours en XAF entiers. Jamais de décimales.
+  `5000` ✅ — `5000.50` ❌
+</Callout>
+
+---
+
+## Protection contre les abus
+
+<Callout type="warning" emoji="🛡️">
+  **Rate limiting** — Protégez votre endpoint `/pay` contre les abus.
+  Sans rate limiting, un attaquant peut spammer des demandes de paiement,
+  épuiser votre quota API et harceler vos utilisateurs avec des notifications SMS.
+</Callout>
+
+```bash filename="Terminal"
+npm install express-rate-limit
+```
+
+```typescript filename="src/middleware/rateLimiter.ts"
+import rateLimit from 'express-rate-limit'
+
+export const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                   // 10 tentatives par IP par fenêtre
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Trop de tentatives de paiement. Réessayez dans 15 minutes.'
+  }
+})
+```
+
+```typescript filename="src/index.ts (ajout)"
+import { paymentLimiter } from './middleware/rateLimiter'
+
+// Appliquer le rate limiting sur les routes de paiement
+app.use('/pay', paymentLimiter)
+```

@@ -1,0 +1,742 @@
+---
+title: Intégration Next.js
+description: Guide complet pour intégrer Kadryza dans une application Next.js avec App Router
+---
+
+import { Callout, Steps, Tabs } from 'nextra/components'
+import { EndpointHeader } from '@/components/EndpointHeader'
+
+# Intégration Next.js (App Router)
+
+Ce guide vous accompagne pas à pas pour intégrer Kadryza dans une application **Next.js 14+** 
+avec l'**App Router**. À la fin, vous aurez un flux de paiement Mobile Money complet :
+initiation, webhook, et page checkout.
+
+<Callout type="info" emoji="📦">
+  Ce guide utilise l'App Router (dossier `app/`). Si vous utilisez le Pages Router (dossier `pages/`),
+  adaptez les Route Handlers en API Routes (`pages/api/`).
+</Callout>
+
+---
+
+<Steps>
+
+### Installation et configuration
+
+Installez le SDK Kadryza dans votre projet Next.js :
+
+<Tabs items={['npm', 'yarn', 'pnpm']}>
+  <Tabs.Tab>
+```bash
+npm install @kadryza/sdk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+yarn add @kadryza/sdk
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash
+pnpm add @kadryza/sdk
+```
+  </Tabs.Tab>
+</Tabs>
+
+Créez un fichier `.env.local` à la racine de votre projet :
+
+```bash filename=".env.local"
+# Clé API Kadryza — NE PAS COMMITER
+KADRYZA_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Secret pour vérifier les signatures webhook
+KADRYZA_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+<Callout type="error" emoji="🔐">
+  `KADRYZA_API_KEY` et `KADRYZA_WEBHOOK_SECRET` ne doivent **pas** avoir le préfixe `NEXT_PUBLIC_`.
+  Ce sont des secrets serveur qui ne doivent jamais être exposés au navigateur.
+</Callout>
+
+Créez un fichier utilitaire pour initialiser le client Kadryza :
+
+```typescript filename="lib/kadryza.ts"
+import Kadryza from '@kadryza/sdk'
+
+if (!process.env.KADRYZA_API_KEY) {
+  throw new Error(
+    'Variable KADRYZA_API_KEY manquante. ' +
+    'Ajoutez-la dans votre fichier .env.local'
+  )
+}
+
+export const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+```
+
+---
+
+### Route API — Initier un paiement
+
+Créez un Route Handler pour recevoir les demandes de paiement depuis votre frontend
+et les transmettre à l'API Kadryza.
+
+```typescript filename="app/api/payment/route.ts"
+import { NextRequest, NextResponse } from 'next/server'
+import { kadryza } from '@/lib/kadryza'
+import { KadryzaValidationError, KadryzaGatewayUnavailableError } from '@kadryza/sdk'
+
+// Typage strict des données attendues du frontend
+interface PaymentRequest {
+  orderId: string
+  amount: number
+  operator: 'AIRTEL' | 'MOOV'
+  phoneNumber: string
+  description?: string
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: PaymentRequest = await request.json()
+
+    // Validation côté serveur avant d'appeler Kadryza
+    if (!body.orderId || !body.amount || !body.operator || !body.phoneNumber) {
+      return NextResponse.json(
+        { error: 'Champs requis manquants : orderId, amount, operator, phoneNumber' },
+        { status: 400 }
+      )
+    }
+
+    if (!Number.isInteger(body.amount) || body.amount <= 0) {
+      return NextResponse.json(
+        { error: 'Le montant doit être un entier positif en XAF' },
+        { status: 400 }
+      )
+    }
+
+    if (!body.phoneNumber.startsWith('+235')) {
+      return NextResponse.json(
+        { error: 'Le numéro doit commencer par +235' },
+        { status: 400 }
+      )
+    }
+
+    // Initier la transaction via le SDK Kadryza
+    const transaction = await kadryza.transactions.initiate({
+      reference: body.orderId,
+      amount: body.amount,
+      currency: 'XAF',
+      operator: body.operator,
+      phone_number: body.phoneNumber,
+      description: body.description || `Paiement commande #${body.orderId}`
+    })
+
+    return NextResponse.json({
+      transactionId: transaction.id,
+      internalRef: transaction.internal_ref,
+      status: transaction.status,
+      expiresAt: transaction.expires_at
+    }, { status: 201 })
+
+  } catch (error) {
+    if (error instanceof KadryzaValidationError) {
+      return NextResponse.json(
+        { error: 'Données de paiement invalides', details: error.fields },
+        { status: 422 }
+      )
+    }
+
+    if (error instanceof KadryzaGatewayUnavailableError) {
+      return NextResponse.json(
+        { error: 'Le service de paiement est temporairement indisponible. Réessayez dans quelques minutes.' },
+        { status: 503 }
+      )
+    }
+
+    console.error('Erreur inattendue lors de l\'initiation du paiement:', error)
+    return NextResponse.json(
+      { error: 'Erreur interne du serveur' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+---
+
+### Route API — Recevoir les webhooks
+
+Créez un Route Handler dédié à la réception des webhooks Kadryza.
+Ce handler vérifie la signature, acquitte immédiatement et traite l'événement.
+
+<Callout type="warning" emoji="⚠️">
+  **Point critique** — Dans l'App Router, utilisez `request.text()` (et non `request.json()`)
+  pour récupérer le body brut. La vérification de signature nécessite le payload **non parsé**.
+</Callout>
+
+```typescript filename="app/api/webhooks/kadryza/route.ts"
+import { NextRequest, NextResponse } from 'next/server'
+import { kadryza } from '@/lib/kadryza'
+
+// Forcer l'exécution dynamique (désactiver le cache statique)
+export const dynamic = 'force-dynamic'
+
+interface KadryzaWebhookEvent {
+  event: 'transaction.success' | 'transaction.failed' | 'transaction.timeout'
+  data: {
+    id: string
+    reference: string
+    internal_ref: string
+    amount: number
+    currency: string
+    operator: string
+    phone_number: string
+    description: string | null
+    status: string
+    created_at: string
+    updated_at: string
+  }
+  timestamp: string
+}
+
+export async function POST(request: NextRequest) {
+  // 1. Lire le body brut (PAS json())
+  const payload = await request.text()
+
+  // 2. Récupérer la signature du header
+  const signature = request.headers.get('x-kadryza-signature')
+  if (!signature) {
+    console.error('Webhook reçu sans header X-Kadryza-Signature')
+    return NextResponse.json(
+      { error: 'Header X-Kadryza-Signature manquant' },
+      { status: 400 }
+    )
+  }
+
+  // 3. Vérifier la signature HMAC-SHA256
+  if (!process.env.KADRYZA_WEBHOOK_SECRET) {
+    console.error('Variable KADRYZA_WEBHOOK_SECRET manquante')
+    return NextResponse.json(
+      { error: 'Configuration serveur incorrecte' },
+      { status: 500 }
+    )
+  }
+
+  const isValid = kadryza.webhooks.verifySignature({
+    payload,
+    signature,
+    secret: process.env.KADRYZA_WEBHOOK_SECRET
+  })
+
+  if (!isValid) {
+    console.error('Signature webhook invalide — requête rejetée')
+    return NextResponse.json(
+      { error: 'Signature invalide' },
+      { status: 401 }
+    )
+  }
+
+  // 4. Vérifier l'idempotence (éviter de traiter le même event 2 fois)
+  const deliveryId = request.headers.get('x-kadryza-delivery-id')
+
+  // En production, vérifier dans votre base de données :
+  // const dejaTraite = await db.webhookDeliveries.findUnique({ where: { id: deliveryId } })
+  // if (dejaTraite) return NextResponse.json({ received: true })
+
+  // 5. Parser l'événement
+  const event: KadryzaWebhookEvent = JSON.parse(payload)
+
+  // 6. Traiter selon le type d'événement
+  try {
+    switch (event.event) {
+      case 'transaction.success':
+        await handlePaymentSuccess(event)
+        break
+
+      case 'transaction.failed':
+        await handlePaymentFailed(event)
+        break
+
+      case 'transaction.timeout':
+        await handlePaymentTimeout(event)
+        break
+
+      default:
+        console.log('Événement webhook inconnu:', event.event)
+    }
+
+    // 7. Marquer le delivery comme traité
+    // await db.webhookDeliveries.create({ data: { id: deliveryId, event: event.event, processedAt: new Date() } })
+
+  } catch (error) {
+    console.error('Erreur lors du traitement du webhook:', error)
+    // On retourne quand même 200 pour éviter les retries inutiles
+    // L'erreur est loggée et peut être investiguée ensuite
+  }
+
+  return NextResponse.json({ received: true })
+}
+
+async function handlePaymentSuccess(event: KadryzaWebhookEvent) {
+  console.log('✅ Paiement réussi:', event.data.reference, '—', event.data.amount, 'XAF')
+
+  // Mettre à jour la commande dans votre base de données
+  // await db.orders.update({
+  //   where: { id: event.data.reference },
+  //   data: {
+  //     status: 'PAID',
+  //     paidAt: new Date(event.timestamp),
+  //     kadryzaTransactionId: event.data.id,
+  //     kadryzaInternalRef: event.data.internal_ref
+  //   }
+  // })
+
+  // Envoyer un email de confirmation
+  // await sendConfirmationEmail(event.data.reference)
+
+  // Démarrer le processus de livraison
+  // await startFulfillment(event.data.reference)
+}
+
+async function handlePaymentFailed(event: KadryzaWebhookEvent) {
+  console.log('❌ Paiement échoué:', event.data.reference)
+
+  // Mettre à jour la commande
+  // await db.orders.update({
+  //   where: { id: event.data.reference },
+  //   data: { status: 'PAYMENT_FAILED' }
+  // })
+
+  // Notifier le client
+  // await sendPaymentFailedEmail(event.data.reference)
+}
+
+async function handlePaymentTimeout(event: KadryzaWebhookEvent) {
+  console.log('⏰ Paiement expiré:', event.data.reference)
+
+  // Mettre à jour la commande
+  // await db.orders.update({
+  //   where: { id: event.data.reference },
+  //   data: { status: 'PAYMENT_EXPIRED' }
+  // })
+
+  // Proposer au client de réessayer
+  // await sendRetryPaymentEmail(event.data.reference)
+}
+```
+
+---
+
+### Page Checkout complète
+
+Créez une page de paiement interactive qui collecte les informations du payeur
+et appelle votre Route API pour initier la transaction.
+
+```typescript filename="app/checkout/page.tsx"
+'use client'
+
+import { useState, FormEvent } from 'react'
+
+interface PaymentResult {
+  transactionId: string
+  internalRef: string
+  status: string
+  expiresAt: string
+}
+
+interface PaymentError {
+  error: string
+  details?: Record<string, string>
+}
+
+export default function CheckoutPage() {
+  const [operator, setOperator] = useState<'AIRTEL' | 'MOOV'>('AIRTEL')
+  const [phoneNumber, setPhoneNumber] = useState('+235')
+  const [amount] = useState(15000) // Montant de la commande en XAF
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<PaymentResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const response = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: `order_${Date.now()}`,
+          amount,
+          operator,
+          phoneNumber,
+          description: 'Commande depuis le site web'
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        const errorData = data as PaymentError
+        if (errorData.details) {
+          const detailMessages = Object.entries(errorData.details)
+            .map(([field, msg]) => `${field}: ${msg}`)
+            .join(', ')
+          setError(`${errorData.error} — ${detailMessages}`)
+        } else {
+          setError(errorData.error)
+        }
+        return
+      }
+
+      setResult(data as PaymentResult)
+    } catch {
+      setError('Erreur de connexion. Vérifiez votre connexion internet et réessayez.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: '480px', margin: '40px auto', padding: '0 20px' }}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '24px' }}>
+        Paiement Mobile Money
+      </h1>
+
+      {/* Résultat de paiement */}
+      {result && (
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: '#f0fdf4',
+          border: '1px solid #86efac',
+          marginBottom: '24px'
+        }}>
+          <p style={{ fontWeight: 600, color: '#166534' }}>
+            ✅ Demande de paiement envoyée !
+          </p>
+          <p style={{ fontSize: '0.875rem', color: '#15803d', marginTop: '8px' }}>
+            Confirmez le paiement de <strong>{amount.toLocaleString('fr-FR')} XAF</strong> sur votre téléphone.
+          </p>
+          <div style={{ marginTop: '12px', fontSize: '0.8rem', color: '#166534' }}>
+            <p>Référence : {result.internalRef}</p>
+            <p>Expire à : {new Date(result.expiresAt).toLocaleTimeString('fr-FR')}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Message d'erreur */}
+      {error && (
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fca5a5',
+          marginBottom: '24px'
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b' }}>❌ Erreur</p>
+          <p style={{ fontSize: '0.875rem', color: '#b91c1c', marginTop: '4px' }}>{error}</p>
+        </div>
+      )}
+
+      {/* Formulaire de paiement */}
+      {!result && (
+        <form onSubmit={handleSubmit}>
+          {/* Montant (affiché, non modifiable) */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontWeight: 500, marginBottom: '6px', fontSize: '0.875rem' }}>
+              Montant à payer
+            </label>
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: '8px',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              fontSize: '1.25rem',
+              fontWeight: 700
+            }}>
+              {amount.toLocaleString('fr-FR')} XAF
+            </div>
+          </div>
+
+          {/* Sélection opérateur */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontWeight: 500, marginBottom: '6px', fontSize: '0.875rem' }}>
+              Opérateur Mobile Money
+            </label>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {(['AIRTEL', 'MOOV'] as const).map((op) => (
+                <button
+                  key={op}
+                  type="button"
+                  onClick={() => setOperator(op)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: operator === op ? '2px solid #f97316' : '1px solid #e5e7eb',
+                    backgroundColor: operator === op ? '#fff7ed' : '#ffffff',
+                    fontWeight: operator === op ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {op === 'AIRTEL' ? '📱 Airtel Money' : '📱 Moov Money'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Numéro de téléphone */}
+          <div style={{ marginBottom: '24px' }}>
+            <label
+              htmlFor="phoneNumber"
+              style={{ display: 'block', fontWeight: 500, marginBottom: '6px', fontSize: '0.875rem' }}
+            >
+              Numéro de téléphone
+            </label>
+            <input
+              id="phoneNumber"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+23566000000"
+              required
+              pattern="\+235[0-9]{8}"
+              title="Format : +235 suivi de 8 chiffres"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb',
+                fontSize: '1rem',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+            <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '4px' }}>
+              Format : +235 suivi de 8 chiffres
+            </p>
+          </div>
+
+          {/* Bouton payer */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '14px',
+              borderRadius: '10px',
+              border: 'none',
+              backgroundColor: loading ? '#fed7aa' : '#f97316',
+              color: '#ffffff',
+              fontSize: '1rem',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+          >
+            {loading ? '⏳ Envoi en cours...' : `Payer ${amount.toLocaleString('fr-FR')} XAF`}
+          </button>
+
+          <p style={{ fontSize: '0.75rem', color: '#9ca3af', textAlign: 'center', marginTop: '12px' }}>
+            🔒 Paiement sécurisé par Kadryza
+          </p>
+        </form>
+      )}
+
+      {/* Bouton réessayer après succès */}
+      {result && (
+        <button
+          onClick={() => { setResult(null); setError(null) }}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            backgroundColor: '#ffffff',
+            cursor: 'pointer',
+            fontSize: '0.875rem'
+          }}
+        >
+          Effectuer un autre paiement
+        </button>
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+### Vérifier le statut côté client (optionnel)
+
+Si vous souhaitez afficher le statut en temps réel sur la page checkout, créez une route
+pour interroger Kadryza et un hook de polling côté client :
+
+<Callout type="warning" emoji="⚠️">
+  **Sécurité** — L'endpoint ci-dessous est accessible sans authentification.
+  En production, protégez cette route avec un cookie de session ou un token
+  pour éviter qu'un tiers consulte le statut de transactions qui ne lui appartiennent pas.
+</Callout>
+
+```typescript filename="app/api/payment/[id]/route.ts"
+import { NextRequest, NextResponse } from 'next/server'
+import { kadryza } from '@/lib/kadryza'
+import { KadryzaNotFoundError } from '@kadryza/sdk'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const transaction = await kadryza.transactions.get(params.id)
+
+    return NextResponse.json({
+      status: transaction.status,
+      amount: transaction.amount,
+      operator: transaction.operator,
+      internalRef: transaction.internal_ref,
+      updatedAt: transaction.updated_at
+    })
+
+  } catch (error) {
+    if (error instanceof KadryzaNotFoundError) {
+      return NextResponse.json(
+        { error: 'Transaction introuvable' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Erreur interne' },
+      { status: 500 }
+    )
+  }
+}
+```
+
+```typescript filename="hooks/usePaymentStatus.ts"
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+
+type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'EXPIRED'
+
+interface PaymentStatusResult {
+  status: PaymentStatus | null
+  loading: boolean
+  error: string | null
+}
+
+export function usePaymentStatus(transactionId: string | null): PaymentStatusResult {
+  const [status, setStatus] = useState<PaymentStatus | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const checkStatus = useCallback(async () => {
+    if (!transactionId) return
+
+    try {
+      const response = await fetch(`/api/payment/${transactionId}`)
+      if (!response.ok) throw new Error('Erreur de récupération du statut')
+
+      const data = await response.json()
+      setStatus(data.status)
+
+      // Arrêter le polling si le statut est final
+      if (['SUCCESS', 'FAILED', 'TIMEOUT', 'EXPIRED'].includes(data.status)) {
+        return true // Signal d'arrêt
+      }
+    } catch {
+      setError('Impossible de vérifier le statut du paiement')
+      return true // Arrêter en cas d'erreur
+    }
+
+    return false
+  }, [transactionId])
+
+  useEffect(() => {
+    if (!transactionId) return
+
+    setLoading(true)
+    setError(null)
+
+    let intervalId: ReturnType<typeof setInterval>
+
+    // Vérifier immédiatement, puis toutes les 3 secondes
+    checkStatus().then((done) => {
+      setLoading(false)
+      if (done) return
+
+      intervalId = setInterval(async () => {
+        const shouldStop = await checkStatus()
+        if (shouldStop) {
+          clearInterval(intervalId)
+        }
+      }, 3000) // Polling toutes les 3 secondes
+    })
+
+    // Arrêter le polling après 5 minutes (timeout transaction)
+    const timeoutId = setTimeout(() => {
+      if (intervalId) clearInterval(intervalId)
+    }, 5 * 60 * 1000)
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+      clearTimeout(timeoutId)
+    }
+  }, [transactionId, checkStatus])
+
+  return { status, loading, error }
+}
+```
+
+<Callout type="info" emoji="💡">
+  Le polling côté client est un **complément** aux webhooks, pas un remplacement.
+  Les webhooks restent la méthode fiable pour mettre à jour votre base de données.
+  Le polling côté client sert uniquement à offrir un feedback en temps réel à l'utilisateur
+  pendant qu'il attend la confirmation sur son téléphone.
+</Callout>
+
+</Steps>
+
+---
+
+## Structure de fichiers finale
+
+```
+app/
+├── api/
+│   ├── payment/
+│   │   ├── route.ts              ← Initier un paiement
+│   │   └── [id]/
+│   │       └── route.ts          ← Vérifier le statut
+│   └── webhooks/
+│       └── kadryza/
+│           └── route.ts          ← Recevoir les webhooks
+├── checkout/
+│   └── page.tsx                  ← Page checkout UI
+├── layout.tsx
+└── page.tsx
+hooks/
+└── usePaymentStatus.ts           ← Hook polling statut
+lib/
+└── kadryza.ts                    ← Client SDK singleton
+.env.local                        ← Secrets (non commité)
+```
+
+---
+
+## Checklist de déploiement
+
+| Étape | Action |
+|-------|--------|
+| 1 | Ajoutez `KADRYZA_API_KEY` et `KADRYZA_WEBHOOK_SECRET` dans les variables d'environnement de votre plateforme (Vercel, Railway, etc.) |
+| 2 | Configurez l'URL webhook dans le [dashboard Kadryza](https://dashboard.kadryza.app) : `https://votre-domaine.com/api/webhooks/kadryza` |
+| 3 | Testez en local avec [ngrok](/guides/webhook-verification#tester-localement) avant de déployer |
+| 4 | Vérifiez que votre endpoint webhook retourne bien `200` dans les logs du dashboard |
+| 5 | Activez le logging des transactions pour le monitoring en production |

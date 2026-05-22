@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   Styles de base
+   ============================================================================= */
+
+@layer base {
+  /* Reset & fondations */
+  *,
+  *::before,
+  *::after {
+    @apply border-slate-200;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-slate-900 font-sans;
+    font-feature-settings: 'cv11', 'ss01'; /* Alternates Inter */
+  }
+
+  /* Typography defaults */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight text-slate-900;
+  }
+
+  /* Données financières et références en mono */
+  [data-mono] {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Focus visible accessible */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-kadryza-500;
+  }
+
+  /* Scrollbar custom (Webkit) */
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+}
+
+/* =============================================================================
+   Composants réutilisables
+   ============================================================================= */
+
+@layer components {
+  /* Carte standard du dashboard */
+  .card {
+    @apply bg-surface rounded-xl border border-slate-200 shadow-card;
+  }
+
+  .card-hover {
+    @apply card transition-shadow duration-200 hover:shadow-card-hover;
+  }
+
+  /* Badge de statut */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5
+           text-xs font-medium border;
+  }
+
+  /* Bouton primaire Kadryza */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg bg-kadryza-500 px-4 py-2.5
+           text-sm font-medium text-white
+           shadow-sm
+           transition-all duration-200
+           hover:bg-kadryza-600
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kadryza-500
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Bouton secondaire */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg border border-slate-300 bg-white px-4 py-2.5
+           text-sm font-medium text-slate-700
+           shadow-sm
+           transition-all duration-200
+           hover:bg-slate-50
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kadryza-500
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Bouton danger */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg bg-red-500 px-4 py-2.5
+           text-sm font-medium text-white
+           shadow-sm
+           transition-all duration-200
+           hover:bg-red-600
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Bouton ghost (sidebar nav) */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-lg px-3 py-2
+           text-sm font-medium text-slate-600
+           transition-colors duration-150
+           hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  /* Input de formulaire */
+  .input {
+    @apply block w-full rounded-lg border border-slate-300
+           bg-white px-3.5 py-2.5
+           text-sm text-slate-900
+           placeholder:text-slate-400
+           shadow-sm
+           transition-colors duration-150
+           focus:border-kadryza-500 focus:ring-2 focus:ring-kadryza-500/20 focus:outline-none
+           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed;
+  }
+
+  /* Label de formulaire */
+  .label {
+    @apply block text-sm font-medium text-slate-700 mb-1.5;
+  }
+
+  /* Message d'erreur de formulaire */
+  .field-error {
+    @apply mt-1.5 text-xs text-red-500;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200;
+  }
+
+  /* Indicateur de statut (point coloré) */
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+
+  .status-dot-animated {
+    @apply status-dot animate-pulse-dot;
+  }
+
+  /* Overlay pour les modals */
+  .overlay {
+    @apply fixed inset-0 z-50 bg-black/50 backdrop-blur-sm
+           transition-opacity duration-200;
+  }
+}
+
+/* =============================================================================
+   Utilitaires
+   ============================================================================= */
+
+@layer utilities {
+  /* Animation d'apparition pour les éléments du dashboard */
+  .animate-in {
+    @apply animate-fade-in;
+  }
+
+  /* Masquer le scrollbar tout en gardant le scroll */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

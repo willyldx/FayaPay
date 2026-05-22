@@ -11,11 +11,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/fayapay/faya-backend/internal/api/handlers"
-	"github.com/fayapay/faya-backend/internal/api/middleware"
-	"github.com/fayapay/faya-backend/internal/config"
-	"github.com/fayapay/faya-backend/internal/gateway"
-	"github.com/fayapay/faya-backend/internal/services"
+	"github.com/kadryza/kadryza-backend/internal/api/handlers"
+	"github.com/kadryza/kadryza-backend/internal/api/middleware"
+	"github.com/kadryza/kadryza-backend/internal/config"
+	"github.com/kadryza/kadryza-backend/internal/gateway"
+	"github.com/kadryza/kadryza-backend/internal/services"
 )
 
 // Dependencies holds all shared dependencies injected into route handlers.

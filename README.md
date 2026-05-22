@@ -1,13 +1,13 @@
-# FayaPay Backend
+# Kadryza Backend
 
 > Infrastructure de paiement Mobile Money pour le Tchad et la zone CEMAC.
 
 ## Architecture
 
-FayaPay utilise un device Android physique (Gateway) comme intermédiaire pour exécuter les sessions USSD et intercepter les SMS de confirmation des opérateurs (Airtel Money, Moov Money).
+Kadryza utilise un device Android physique (Gateway) comme intermédiaire pour exécuter les sessions USSD et intercepter les SMS de confirmation des opérateurs (Airtel Money, Moov Money).
 
 ```
-Merchant API → faya-backend → WebSocket → Gateway Android → USSD/SMS → Opérateur
+Merchant API → kadryza-backend → WebSocket → Gateway Android → USSD/SMS → Opérateur
 ```
 
 ## Stack technique
@@ -29,7 +29,7 @@ cp .env.example .env
 # Éditer .env avec vos valeurs
 
 # 2. Créer la base de données
-createdb fayapay
+createdb kadryza
 
 # 3. Appliquer les migrations
 make migrate

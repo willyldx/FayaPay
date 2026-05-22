@@ -1,0 +1,342 @@
+---
+title: Démarrage rapide
+description: Intégrez Kadryza dans votre projet en 5 minutes — du compte merchant au premier paiement
+---
+
+import { Callout, Steps, Tabs } from 'nextra/components'
+import { EndpointHeader } from '@/components/EndpointHeader'
+import { ParamTable } from '@/components/ParamTable'
+import { RequestExample } from '@/components/RequestExample'
+import { ResponseExample } from '@/components/ResponseExample'
+import { StatusBadge } from '@/components/StatusBadge'
+
+# Démarrage rapide
+
+Ce guide vous accompagne de la création de votre compte à votre premier paiement Mobile Money.
+**Temps estimé : 5 minutes.**
+
+<Callout type="info" emoji="💡">
+  Les paiements Kadryza sont traités en **XAF** (Franc CFA CEMAC).
+  Opérateurs supportés : **Airtel Money** et **Moov Money** (Tchad 🇹🇩).
+</Callout>
+
+---
+
+<Steps>
+
+### Créer un compte merchant
+
+Rendez-vous sur le [dashboard Kadryza](https://dashboard.kadryza.app/register) et créez votre compte.
+
+Vous aurez besoin de :
+- Une adresse email valide
+- Un numéro de téléphone tchadien (+235XXXXXXXX)
+- Les informations de votre entreprise
+
+Une fois inscrit, vous accédez immédiatement à votre tableau de bord.
+
+---
+
+### Obtenir une clé API
+
+Depuis votre dashboard, accédez à **API Keys** → **Créer une clé**.
+
+Votre clé API est générée au format :
+
+```
+kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+<Callout type="error" emoji="🔐">
+  **Sécurité critique** — Votre clé API n'est affichée qu'**une seule fois** à la création.
+  Copiez-la immédiatement et stockez-la dans un endroit sécurisé (gestionnaire de secrets, variable d'environnement).
+  Ne la commitez **jamais** dans votre code source.
+</Callout>
+
+Ajoutez votre clé dans un fichier `.env` :
+
+```bash filename=".env"
+KADRYZA_API_KEY=kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+---
+
+### Installer le SDK
+
+<Tabs items={['npm', 'yarn', 'pnpm']}>
+  <Tabs.Tab>
+    ```bash
+    npm install @kadryza/sdk
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    yarn add @kadryza/sdk
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    pnpm add @kadryza/sdk
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="warning">
+  Le SDK doit être utilisé **côté serveur uniquement** (Node.js).
+  Ne l'importez jamais dans du code exécuté côté navigateur — votre clé API serait exposée.
+</Callout>
+
+---
+
+### Initier votre premier paiement
+
+<EndpointHeader
+  method="POST"
+  path="/v1/transactions"
+  description="Initier une transaction de paiement Mobile Money"
+/>
+
+<ParamTable params={[
+  { name: 'reference', type: 'string', required: true, description: 'Référence unique de votre commande (ex: order_abc123)' },
+  { name: 'amount', type: 'integer', required: true, description: 'Montant en XAF — entier positif, jamais de décimales' },
+  { name: 'currency', type: 'string', required: true, description: '"XAF" uniquement' },
+  { name: 'operator', type: 'string', required: true, description: '"AIRTEL" ou "MOOV"' },
+  { name: 'phone_number', type: 'string', required: true, description: 'Numéro au format international : +235XXXXXXXX' },
+  { name: 'description', type: 'string', required: false, description: 'Description du paiement — max 255 caractères' }
+]} />
+
+<Tabs items={['Node.js SDK', 'cURL', 'HTTP brut']}>
+  <Tabs.Tab>
+```javascript filename="server.js"
+import Kadryza from '@kadryza/sdk'
+
+// Initialiser le client avec votre clé API
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+async function premierPaiement() {
+  try {
+    const transaction = await kadryza.transactions.initiate({
+      reference: 'order_abc123',
+      amount: 5000,
+      currency: 'XAF',
+      operator: 'AIRTEL',
+      phone_number: '+23566000000',
+      description: 'Paiement commande #ABC123'
+    })
+
+    console.log('Transaction créée !')
+    console.log('ID:', transaction.id)
+    console.log('Référence interne:', transaction.internal_ref)
+    console.log('Statut:', transaction.status)
+    console.log('Expire à:', transaction.expires_at)
+  } catch (error) {
+    if (error.code === 'VALIDATION_ERROR') {
+      console.error('Paramètres invalides:', error.fields)
+    } else if (error.code === 'UNAUTHORIZED') {
+      console.error('Clé API invalide — vérifiez votre configuration')
+    } else {
+      console.error('Erreur inattendue:', error.message)
+    }
+  }
+}
+
+premierPaiement()
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash filename="Terminal"
+curl -X POST https://api.kadryza.app/v1/transactions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $KADRYZA_API_KEY" \
+  -d '{
+    "reference": "order_abc123",
+    "amount": 5000,
+    "currency": "XAF",
+    "operator": "AIRTEL",
+    "phone_number": "+23566000000",
+    "description": "Paiement commande #ABC123"
+  }'
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```http filename="Requête HTTP"
+POST /v1/transactions HTTP/1.1
+Host: api.kadryza.app
+Content-Type: application/json
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "reference": "order_abc123",
+  "amount": 5000,
+  "currency": "XAF",
+  "operator": "AIRTEL",
+  "phone_number": "+23566000000",
+  "description": "Paiement commande #ABC123"
+}
+```
+  </Tabs.Tab>
+</Tabs>
+
+**Réponse `201 Created` :**
+
+```json filename="Réponse"
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "reference": "order_abc123",
+  "internal_ref": "KADRYZA-A1B2C3D4",
+  "amount": 5000,
+  "currency": "XAF",
+  "operator": "AIRTEL",
+  "phone_number": "+23566000000",
+  "description": "Paiement commande #ABC123",
+  "status": "PENDING",
+  "created_at": "2025-01-15T10:00:00Z",
+  "expires_at": "2025-01-15T10:05:00Z"
+}
+```
+
+Le statut initial est toujours <StatusBadge status="PENDING" />. La transaction expire après **5 minutes** si l'utilisateur ne confirme pas le paiement sur son téléphone.
+
+<Callout type="info" emoji="🔄">
+  **Idempotence** — Si vous envoyez deux fois la même `reference`, Kadryza retourne la transaction existante
+  sans créer de doublon. Utilisez cette propriété pour gérer les retries réseau en toute sécurité.
+</Callout>
+
+---
+
+### Configurer un webhook
+
+Le statut d'une transaction change de façon **asynchrone**. L'utilisateur confirme (ou refuse) le paiement sur son téléphone.
+**Ne pollez pas** l'API pour vérifier le statut — utilisez les webhooks.
+
+Depuis votre dashboard, accédez à **Webhooks** → **Ajouter un endpoint** et configurez l'URL de réception.
+
+Voici un exemple complet de réception de webhook :
+
+<Tabs items={['Node.js SDK', 'Express.js natif']}>
+  <Tabs.Tab>
+```javascript filename="webhook-handler.js"
+import Kadryza from '@kadryza/sdk'
+import express from 'express'
+
+const app = express()
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+// IMPORTANT : utiliser express.raw() pour le webhook
+// afin de préserver le body brut pour la vérification de signature
+app.post('/webhooks/kadryza', express.raw({ type: 'application/json' }), (req, res) => {
+  const signature = req.headers['x-kadryza-signature']
+  const payload = req.body.toString()
+
+  // Vérifier la signature AVANT tout traitement
+  const isValid = kadryza.webhooks.verifySignature({
+    payload,
+    signature,
+    secret: process.env.KADRYZA_WEBHOOK_SECRET
+  })
+
+  if (!isValid) {
+    console.error('Signature webhook invalide — requête rejetée')
+    return res.status(401).json({ error: 'Signature invalide' })
+  }
+
+  // Répondre immédiatement avec 200 pour acquitter la réception
+  res.status(200).json({ received: true })
+
+  // Traiter l'événement de manière asynchrone
+  const event = JSON.parse(payload)
+
+  switch (event.event) {
+    case 'transaction.success':
+      console.log('✅ Paiement réussi:', event.data.reference)
+      console.log('   Montant:', event.data.amount, 'XAF')
+      // Mettre à jour la commande dans votre base de données
+      break
+
+    case 'transaction.failed':
+      console.log('❌ Paiement échoué:', event.data.reference)
+      // Notifier le client et proposer un nouveau paiement
+      break
+
+    case 'transaction.timeout':
+      console.log('⏰ Paiement expiré:', event.data.reference)
+      // La transaction a expiré après 5 minutes sans confirmation
+      break
+
+    default:
+      console.log('Événement inconnu:', event.event)
+  }
+})
+
+app.listen(3000, () => {
+  console.log('Webhook handler actif sur le port 3000')
+})
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```javascript filename="webhook-natif.js"
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+
+app.post('/webhooks/kadryza', express.raw({ type: 'application/json' }), (req, res) => {
+  const signature = req.headers['x-kadryza-signature']
+  const payload = req.body.toString()
+
+  // Vérification manuelle de la signature HMAC-SHA256
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET)
+    .update(payload)
+    .digest('hex')
+
+  // IMPORTANT : utiliser timingSafeEqual pour éviter les timing attacks
+  let isValid = false
+  try {
+    isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    // Les buffers ont des longueurs différentes → signature invalide
+    isValid = false
+  }
+
+  if (!isValid) {
+    console.error('Signature webhook invalide')
+    return res.status(401).json({ error: 'Signature invalide' })
+  }
+
+  // Acquitter immédiatement
+  res.status(200).json({ received: true })
+
+  // Traiter l'événement
+  const event = JSON.parse(payload)
+  console.log('Événement reçu:', event.event, '—', event.data.reference)
+})
+
+app.listen(3000)
+```
+  </Tabs.Tab>
+</Tabs>
+
+</Steps>
+
+---
+
+## Étapes suivantes
+
+Vous avez intégré Kadryza avec succès ! Voici les prochaines lectures recommandées :
+
+| Ressource | Description |
+|-----------|-------------|
+| [Authentification](/authentication) | Comprendre les clés API et les bonnes pratiques de sécurité |
+| [Référence API — Transactions](/api-reference/transactions) | Tous les endpoints transactions en détail |
+| [Référence API — Webhooks](/api-reference/webhooks) | Events, payload, retry policy |
+| [Guide Next.js](/guides/nextjs) | Intégration complète dans une app Next.js |
+| [Guide Express.js](/guides/expressjs) | Intégration complète dans une app Express.js |
+| [Codes d'erreur](/errors) | Toutes les erreurs possibles et leurs solutions |

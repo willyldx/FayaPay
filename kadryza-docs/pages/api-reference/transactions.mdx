@@ -1,0 +1,543 @@
+---
+title: Transactions
+description: Endpoints API pour initier, récupérer et lister les transactions de paiement Mobile Money
+---
+
+import { Callout, Tabs } from 'nextra/components'
+import { EndpointHeader } from '@/components/EndpointHeader'
+import { ParamTable } from '@/components/ParamTable'
+import { StatusBadge } from '@/components/StatusBadge'
+
+# Transactions
+
+L'API Transactions est le cœur de Kadryza. Elle vous permet d'initier des paiements Mobile Money,
+de consulter leur statut et de lister l'historique de vos transactions.
+
+**URL de base :** `https://api.kadryza.app`
+
+<Callout type="info" emoji="🔑">
+  Toutes les requêtes nécessitent le header `Authorization: Bearer <votre_clé_api>`.
+  Consultez le [guide d'authentification](/authentication) pour plus de détails.
+</Callout>
+
+---
+
+## Cycle de vie d'une transaction
+
+Chaque transaction passe par les statuts suivants :
+
+```
+                    ┌─────────────────────────────────────┐
+                    │          Initiation (POST)          │
+                    └──────────────┬──────────────────────┘
+                                   │
+                                   ▼
+                          ┌────────────────┐
+                          │    PENDING     │
+                          │  (en attente)  │
+                          └───────┬────────┘
+                                  │
+                    ┌─────────────┼─────────────┐
+                    │             │             │
+                    ▼             ▼             ▼
+           ┌──────────────┐ ┌──────────┐ ┌───────────┐
+           │   SUCCESS    │ │  FAILED  │ │  TIMEOUT  │
+           │  (confirmé)  │ │ (refusé) │ │ (expiré)  │
+           └──────────────┘ └──────────┘ └───────────┘
+                    │             │             │
+                    ▼             ▼             ▼
+              Webhook envoyé  Webhook envoyé  Webhook envoyé
+          transaction.success  transaction.failed  transaction.timeout
+```
+
+### Détail des statuts
+
+| Statut | Badge | Signification | Durée |
+|--------|-------|---------------|-------|
+| `PENDING` | <StatusBadge status="PENDING" /> | L'utilisateur a reçu la demande de paiement sur son téléphone | Max 5 minutes |
+| `SUCCESS` | <StatusBadge status="SUCCESS" /> | Le paiement a été confirmé par l'utilisateur | Final |
+| `FAILED` | <StatusBadge status="FAILED" /> | Le paiement a été refusé (solde insuffisant, annulation, etc.) | Final |
+| `TIMEOUT` | <StatusBadge status="TIMEOUT" /> | L'utilisateur n'a pas répondu dans les 5 minutes | Final |
+| `EXPIRED` | <StatusBadge status="EXPIRED" /> | La transaction a expiré côté passerelle | Final |
+
+<Callout type="warning">
+  Les statuts `SUCCESS`, `FAILED`, `TIMEOUT` et `EXPIRED` sont **finaux**.
+  Une transaction dans un de ces statuts ne changera plus jamais. Utilisez les [webhooks](/api-reference/webhooks)
+  pour être notifié de ces changements.
+</Callout>
+
+---
+
+## Initier un paiement
+
+<EndpointHeader
+  method="POST"
+  path="/v1/transactions"
+  description="Crée une nouvelle transaction de paiement Mobile Money"
+/>
+
+### Paramètres de la requête
+
+<ParamTable params={[
+  { name: 'reference', type: 'string', required: true, description: 'Référence unique de votre commande. Sert de clé d\'idempotence — deux requêtes avec la même reference retournent la même transaction.' },
+  { name: 'amount', type: 'integer', required: true, description: 'Montant en XAF. Entier positif, minimum 100 XAF. Pas de décimales.' },
+  { name: 'currency', type: 'string', required: true, description: 'Devise du paiement. Seule valeur acceptée : "XAF".' },
+  { name: 'operator', type: 'string', required: true, description: 'Opérateur Mobile Money. Valeurs acceptées : "AIRTEL" ou "MOOV".' },
+  { name: 'phone_number', type: 'string', required: true, description: 'Numéro de téléphone du payeur au format international : +235XXXXXXXX (8 chiffres après le préfixe).' },
+  { name: 'description', type: 'string', required: false, description: 'Description du paiement visible par le payeur. Maximum 255 caractères.' }
+]} />
+
+### Requête
+
+<Tabs items={['Node.js SDK', 'cURL', 'HTTP brut']}>
+  <Tabs.Tab>
+```javascript filename="initiate-payment.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+const transaction = await kadryza.transactions.initiate({
+  reference: 'order_2025_001',
+  amount: 15000,
+  currency: 'XAF',
+  operator: 'AIRTEL',
+  phone_number: '+23566000000',
+  description: 'Abonnement mensuel Premium'
+})
+
+console.log(transaction.id)           // "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+console.log(transaction.internal_ref)  // "KADRYZA-A1B2C3D4"
+console.log(transaction.status)        // "PENDING"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash filename="Terminal"
+curl -X POST https://api.kadryza.app/v1/transactions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -d '{
+    "reference": "order_2025_001",
+    "amount": 15000,
+    "currency": "XAF",
+    "operator": "AIRTEL",
+    "phone_number": "+23566000000",
+    "description": "Abonnement mensuel Premium"
+  }'
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```http filename="Requête"
+POST /v1/transactions HTTP/1.1
+Host: api.kadryza.app
+Content-Type: application/json
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "reference": "order_2025_001",
+  "amount": 15000,
+  "currency": "XAF",
+  "operator": "AIRTEL",
+  "phone_number": "+23566000000",
+  "description": "Abonnement mensuel Premium"
+}
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Réponse `201 Created`
+
+```json filename="201 Created"
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "reference": "order_2025_001",
+  "internal_ref": "KADRYZA-A1B2C3D4",
+  "amount": 15000,
+  "currency": "XAF",
+  "operator": "AIRTEL",
+  "phone_number": "+23566000000",
+  "description": "Abonnement mensuel Premium",
+  "status": "PENDING",
+  "created_at": "2025-06-15T14:30:00Z",
+  "updated_at": "2025-06-15T14:30:00Z",
+  "expires_at": "2025-06-15T14:35:00Z"
+}
+```
+
+### Réponses d'erreur
+
+| HTTP | Code | Cause | Solution |
+|------|------|-------|----------|
+| 400 | `VALIDATION_ERROR` | Paramètres manquants ou invalides | Vérifier les champs requis ci-dessus |
+| 401 | `UNAUTHORIZED` | Clé API invalide | Vérifier le header `Authorization` |
+| 409 | `DUPLICATE_REFERENCE` | `reference` déjà utilisée | Voir [section Idempotence](#idempotence) |
+| 422 | `VALIDATION_ERROR` | Données sémantiquement incorrectes | Lire le champ `fields` de la réponse |
+| 503 | `GATEWAY_UNAVAILABLE` | Passerelle Mobile Money indisponible | Réessayer dans quelques minutes |
+
+```json filename="400 Bad Request — Exemple"
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Paramètres de requête invalides",
+    "status": 400,
+    "fields": {
+      "amount": "Le montant doit être un entier positif",
+      "operator": "Valeurs acceptées : AIRTEL, MOOV"
+    }
+  }
+}
+```
+
+---
+
+## Récupérer une transaction
+
+<EndpointHeader
+  method="GET"
+  path="/v1/transactions/:id"
+  description="Récupère les détails complets d'une transaction par son UUID"
+/>
+
+### Paramètres de l'URL
+
+<ParamTable params={[
+  { name: 'id', type: 'uuid', required: true, description: 'UUID de la transaction retourné lors de la création (champ "id").' }
+]} />
+
+### Requête
+
+<Tabs items={['Node.js SDK', 'cURL', 'HTTP brut']}>
+  <Tabs.Tab>
+```javascript filename="get-transaction.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+const transaction = await kadryza.transactions.get('a1b2c3d4-e5f6-7890-abcd-ef1234567890')
+
+console.log(transaction.status)       // "SUCCESS" | "PENDING" | "FAILED" | "TIMEOUT"
+console.log(transaction.amount)       // 15000
+console.log(transaction.operator)     // "AIRTEL"
+console.log(transaction.internal_ref) // "KADRYZA-A1B2C3D4"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash filename="Terminal"
+curl -X GET https://api.kadryza.app/v1/transactions/a1b2c3d4-e5f6-7890-abcd-ef1234567890 \
+  -H "Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```http filename="Requête"
+GET /v1/transactions/a1b2c3d4-e5f6-7890-abcd-ef1234567890 HTTP/1.1
+Host: api.kadryza.app
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Réponse `200 OK`
+
+```json filename="200 OK"
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "reference": "order_2025_001",
+  "internal_ref": "KADRYZA-A1B2C3D4",
+  "amount": 15000,
+  "currency": "XAF",
+  "operator": "AIRTEL",
+  "phone_number": "+23566000000",
+  "description": "Abonnement mensuel Premium",
+  "status": "SUCCESS",
+  "created_at": "2025-06-15T14:30:00Z",
+  "updated_at": "2025-06-15T14:31:12Z",
+  "expires_at": "2025-06-15T14:35:00Z"
+}
+```
+
+### Réponses d'erreur
+
+| HTTP | Code | Cause | Solution |
+|------|------|-------|----------|
+| 401 | `UNAUTHORIZED` | Clé API invalide | Vérifier le header `Authorization` |
+| 404 | `NOT_FOUND` | Transaction introuvable | Vérifier l'UUID. La transaction appartient peut-être à un autre merchant. |
+
+```json filename="404 Not Found"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Transaction introuvable",
+    "status": 404
+  }
+}
+```
+
+---
+
+## Lister les transactions
+
+<EndpointHeader
+  method="GET"
+  path="/v1/transactions"
+  description="Liste paginée de vos transactions avec filtres optionnels"
+/>
+
+### Paramètres de requête (query string)
+
+<ParamTable params={[
+  { name: 'page', type: 'integer', required: false, description: 'Numéro de la page', default: '1' },
+  { name: 'per_page', type: 'integer', required: false, description: 'Nombre de résultats par page (max 100)', default: '20' },
+  { name: 'status', type: 'string', required: false, description: 'Filtrer par statut : PENDING, SUCCESS, FAILED, TIMEOUT, EXPIRED' },
+  { name: 'operator', type: 'string', required: false, description: 'Filtrer par opérateur : AIRTEL, MOOV' },
+  { name: 'from', type: 'string (ISO 8601)', required: false, description: 'Date de début (inclusif). Format : 2025-01-01T00:00:00Z' },
+  { name: 'to', type: 'string (ISO 8601)', required: false, description: 'Date de fin (inclusif). Format : 2025-12-31T23:59:59Z' }
+]} />
+
+### Requête
+
+<Tabs items={['Node.js SDK', 'cURL', 'HTTP brut']}>
+  <Tabs.Tab>
+```javascript filename="list-transactions.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+// Lister toutes les transactions (page 1, 20 résultats)
+const result = await kadryza.transactions.list()
+
+console.log(result.data)        // Transaction[]
+console.log(result.pagination)  // { page: 1, per_page: 20, total: 142 }
+
+// Avec filtres : transactions réussies via Airtel en juin 2025
+const filtered = await kadryza.transactions.list({
+  status: 'SUCCESS',
+  operator: 'AIRTEL',
+  from: '2025-06-01T00:00:00Z',
+  to: '2025-06-30T23:59:59Z',
+  page: 1,
+  per_page: 50
+})
+
+for (const tx of filtered.data) {
+  console.log(`${tx.reference} — ${tx.amount} XAF — ${tx.status}`)
+}
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```bash filename="Terminal"
+# Lister avec filtres
+curl -X GET "https://api.kadryza.app/v1/transactions?status=SUCCESS&operator=AIRTEL&page=1&per_page=50" \
+  -H "Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```http filename="Requête"
+GET /v1/transactions?status=SUCCESS&operator=AIRTEL&from=2025-06-01T00:00:00Z&to=2025-06-30T23:59:59Z&page=1&per_page=50 HTTP/1.1
+Host: api.kadryza.app
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+  </Tabs.Tab>
+</Tabs>
+
+### Réponse `200 OK`
+
+```json filename="200 OK"
+{
+  "data": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "reference": "order_2025_001",
+      "internal_ref": "KADRYZA-A1B2C3D4",
+      "amount": 15000,
+      "currency": "XAF",
+      "operator": "AIRTEL",
+      "phone_number": "+23566000000",
+      "status": "SUCCESS",
+      "created_at": "2025-06-15T14:30:00Z",
+      "updated_at": "2025-06-15T14:31:12Z"
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "reference": "order_2025_002",
+      "internal_ref": "KADRYZA-B2C3D4E5",
+      "amount": 7500,
+      "currency": "XAF",
+      "operator": "MOOV",
+      "phone_number": "+23599000000",
+      "status": "SUCCESS",
+      "created_at": "2025-06-16T09:15:00Z",
+      "updated_at": "2025-06-16T09:16:30Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 2,
+    "total_pages": 1
+  }
+}
+```
+
+### Réponses d'erreur
+
+| HTTP | Code | Cause | Solution |
+|------|------|-------|----------|
+| 400 | `VALIDATION_ERROR` | Paramètre de filtre invalide (ex: `per_page=500`) | Vérifier les valeurs acceptées dans le tableau ci-dessus |
+| 401 | `UNAUTHORIZED` | Clé API invalide | Vérifier le header `Authorization` |
+
+---
+
+## Idempotence
+
+Le champ `reference` est la clé d'idempotence de Kadryza. Ce mécanisme vous protège contre les doublons
+en cas de retry réseau.
+
+### Comment ça fonctionne
+
+```
+Requête 1 : POST /v1/transactions { "reference": "order_xyz" }
+ → 201 Created — Transaction créée avec statut PENDING
+
+Requête 2 : POST /v1/transactions { "reference": "order_xyz" }
+ → 409 Conflict — Transaction existante retournée (pas de doublon)
+```
+
+### Exemple concret
+
+Imaginons un scénario de timeout réseau :
+
+```javascript filename="idempotence-example.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+async function initierPaiementIdempotent(referenceCommande) {
+  // Utiliser la référence de commande comme clé d'idempotence
+  // Peu importe combien de fois cette fonction est appelée
+  // avec la même référence, une seule transaction sera créée
+  const transaction = await kadryza.transactions.initiate({
+    reference: referenceCommande,
+    amount: 25000,
+    currency: 'XAF',
+    operator: 'MOOV',
+    phone_number: '+23599000000',
+    description: 'Commande e-commerce'
+  })
+
+  return transaction
+}
+
+// Scénario : l'utilisateur clique 3 fois sur le bouton "Payer"
+// ou le réseau timeout et votre système retry automatiquement
+const tx1 = await initierPaiementIdempotent('cmd_2025_abc')  // → Crée la transaction
+const tx2 = await initierPaiementIdempotent('cmd_2025_abc')  // → Retourne la même transaction
+const tx3 = await initierPaiementIdempotent('cmd_2025_abc')  // → Retourne la même transaction
+
+console.log(tx1.id === tx2.id)  // true
+console.log(tx2.id === tx3.id)  // true
+// Une seule transaction existe côté Kadryza
+```
+
+<Callout type="warning">
+  **Attention** — L'idempotence est liée à la `reference`, pas aux autres paramètres.
+  Si vous envoyez la même `reference` avec un montant différent, Kadryza retourne la transaction existante
+  **sans** modifier le montant. Pour créer une transaction avec un montant différent, utilisez une `reference` différente.
+</Callout>
+
+### Bonnes pratiques pour les références
+
+| Approche | Exemple | Commentaire |
+|----------|---------|-------------|
+| ID de commande | `order_2025_001` | ✅ Recommandé — lié à votre logique métier |
+| UUID v4 | `550e8400-e29b-41d4-a716-446655440000` | ✅ Garanti unique |
+| Timestamp + random | `pay_1718450000_abc123` | ✅ Unique et triable |
+| Compteur séquentiel | `1`, `2`, `3` | ⚠️ Risque de collision si plusieurs serveurs |
+| Chaîne vide | `""` | ❌ Refusé par l'API |
+
+---
+
+## Exemple complet : flux de paiement
+
+Voici un flux complet du côté serveur — de l'initiation à la réception du résultat :
+
+```javascript filename="complete-payment-flow.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+// === ÉTAPE 1 : Initier le paiement ===
+async function creerPaiement(commande) {
+  const transaction = await kadryza.transactions.initiate({
+    reference: commande.id,
+    amount: commande.total,
+    currency: 'XAF',
+    operator: commande.operateur,
+    phone_number: commande.telephone,
+    description: `Commande #${commande.id} — ${commande.articles.length} article(s)`
+  })
+
+  // Sauvegarder l'ID de transaction dans votre base
+  await db.commandes.update(commande.id, {
+    kadryza_transaction_id: transaction.id,
+    kadryza_internal_ref: transaction.internal_ref,
+    statut_paiement: 'EN_ATTENTE',
+    paiement_expire_a: transaction.expires_at
+  })
+
+  return {
+    transaction_id: transaction.id,
+    internal_ref: transaction.internal_ref,
+    expires_at: transaction.expires_at
+  }
+}
+
+// === ÉTAPE 2 : Recevoir le webhook ===
+// (Voir /api-reference/webhooks pour l'implémentation complète)
+
+// === ÉTAPE 3 : Vérifier le statut (si webhook manqué) ===
+async function verifierStatut(transactionId) {
+  const transaction = await kadryza.transactions.get(transactionId)
+
+  switch (transaction.status) {
+    case 'PENDING':
+      console.log('⏳ En attente de confirmation du payeur')
+      break
+    case 'SUCCESS':
+      console.log('✅ Paiement confirmé — livrer la commande')
+      break
+    case 'FAILED':
+      console.log('❌ Paiement refusé — proposer un autre moyen de paiement')
+      break
+    case 'TIMEOUT':
+      console.log('⏰ Paiement expiré — proposer de réessayer')
+      break
+  }
+
+  return transaction
+}
+
+// === Utilisation ===
+const commande = {
+  id: 'cmd_2025_789',
+  total: 32000,
+  operateur: 'AIRTEL',
+  telephone: '+23566000000',
+  articles: [
+    { nom: 'Forfait Internet 10Go', prix: 12000 },
+    { nom: 'Forfait Appels 500min', prix: 20000 }
+  ]
+}
+
+const resultat = await creerPaiement(commande)
+console.log('Transaction créée:', resultat.internal_ref)
+console.log('Expire à:', resultat.expires_at)
+```

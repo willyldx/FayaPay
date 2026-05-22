@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Merchant represents a registered business using FayaPay.
+// Merchant represents a registered business using Kadryza.
 type Merchant struct {
 	ID           uuid.UUID `json:"id"`
 	Name         string    `json:"name"`
@@ -68,6 +68,6 @@ type LoginResponse struct {
 // The raw key is NEVER retrievable again after this response.
 type APIKeyResponse struct {
 	APIKey    string `json:"api_key"`    // Full key — shown only once
-	Prefix   string `json:"prefix"`     // e.g. "faya_live_"
+	Prefix   string `json:"prefix"`     // e.g. "kadryza_live_"
 	CreatedAt time.Time `json:"created_at"`
 }

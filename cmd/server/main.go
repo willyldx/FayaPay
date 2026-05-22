@@ -15,10 +15,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/fayapay/faya-backend/internal/api"
-	"github.com/fayapay/faya-backend/internal/config"
-	"github.com/fayapay/faya-backend/internal/gateway"
-	"github.com/fayapay/faya-backend/internal/workers"
+	"github.com/kadryza/kadryza-backend/internal/api"
+	"github.com/kadryza/kadryza-backend/internal/config"
+	"github.com/kadryza/kadryza-backend/internal/gateway"
+	"github.com/kadryza/kadryza-backend/internal/workers"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	logger := initLogger(cfg)
 	defer logger.Sync() //nolint:errcheck
 
-	logger.Info("starting faya-backend",
+	logger.Info("starting kadryza-backend",
 		zap.String("env", cfg.Env),
 		zap.Int("port", cfg.Port),
 	)
@@ -116,7 +116,7 @@ func main() {
 	// 7. Mount Fiber router with all routes and middleware
 	// =========================================================================
 	app := fiber.New(fiber.Config{
-		AppName:               "FayaPay Backend",
+		AppName:               "Kadryza Backend",
 		DisableStartupMessage: cfg.IsProd(),
 		ReadTimeout:           15 * time.Second,
 		WriteTimeout:          15 * time.Second,
@@ -185,7 +185,7 @@ func main() {
 	// Stop the WebSocket Hub.
 	hub.Shutdown()
 
-	logger.Info("faya-backend stopped gracefully")
+	logger.Info("kadryza-backend stopped gracefully")
 }
 
 // =============================================================================

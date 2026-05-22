@@ -6,7 +6,7 @@ run:
 
 # Build the production binary
 build:
-	go build -o bin/faya-backend ./cmd/server
+	go build -o bin/kadryza-backend ./cmd/server
 
 # Apply all migrations in order
 migrate:

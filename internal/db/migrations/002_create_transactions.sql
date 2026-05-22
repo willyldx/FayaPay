@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id     UUID NOT NULL REFERENCES merchants(id) ON DELETE RESTRICT,
     reference       VARCHAR(100) UNIQUE NOT NULL,   -- Merchant-provided reference (idempotency key)
-    internal_ref    VARCHAR(100) UNIQUE NOT NULL,   -- Internal Faya reference (e.g. FAYA-20240115-XXXX)
+    internal_ref    VARCHAR(100) UNIQUE NOT NULL,   -- Internal Kadryza reference (e.g. KADRYZA-20240115-XXXX)
     amount          BIGINT NOT NULL CHECK (amount > 0), -- PRD rule #7: integer centimes, always positive
     currency        currency_type DEFAULT 'XAF',
     operator        operator_type NOT NULL,

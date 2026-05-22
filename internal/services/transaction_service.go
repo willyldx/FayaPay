@@ -15,10 +15,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	db "github.com/fayapay/faya-backend/internal/db/sqlc"
-	"github.com/fayapay/faya-backend/internal/gateway"
-	"github.com/fayapay/faya-backend/internal/models"
-	"github.com/fayapay/faya-backend/internal/workers"
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/gateway"
+	"github.com/kadryza/kadryza-backend/internal/models"
+	"github.com/kadryza/kadryza-backend/internal/workers"
 )
 
 // =============================================================================
@@ -405,14 +405,14 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 // Internal helpers
 // =============================================================================
 
-// generateInternalRef creates a unique internal reference: FAYA-YYYYMMDD-XXXXXXXX
+// generateInternalRef creates a unique internal reference: KADRYZA-YYYYMMDD-XXXXXXXX
 // FIX M3: Uses crypto/rand instead of math/rand for unpredictable references.
 func generateInternalRef() string {
 	date := time.Now().Format("20060102")
 	var buf [4]byte
 	crypto_rand.Read(buf[:]) //nolint:errcheck
 	suffix := fmt.Sprintf("%08X", binary.BigEndian.Uint32(buf[:]))
-	return fmt.Sprintf("FAYA-%s-%s", date, suffix)
+	return fmt.Sprintf("KADRYZA-%s-%s", date, suffix)
 }
 
 // dispatchToGateway sends a payment instruction to the appropriate gateway via WebSocket.

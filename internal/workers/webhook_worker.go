@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	db "github.com/fayapay/faya-backend/internal/db/sqlc"
-	"github.com/fayapay/faya-backend/internal/models"
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/models"
 )
 
 // webhookTaskPayload is the JSON structure stored in the Asynq task.
@@ -132,8 +132,8 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Faya-Signature", "sha256="+signature)
-	req.Header.Set("User-Agent", "FayaPay-Webhook/1.0")
+	req.Header.Set("X-Kadryza-Signature", "sha256="+signature)
+	req.Header.Set("User-Agent", "Kadryza-Webhook/1.0")
 
 	resp, err := h.httpClient.Do(req)
 	if err != nil {

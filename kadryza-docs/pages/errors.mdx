@@ -1,0 +1,365 @@
+---
+title: Codes d'erreur
+description: Liste complète des codes d'erreur API et SDK Kadryza avec solutions concrètes
+---
+
+import { Callout } from 'nextra/components'
+
+# Codes d'erreur
+
+Ce guide répertorie toutes les erreurs que vous pouvez rencontrer lors de l'utilisation de l'API et du SDK Kadryza,
+avec pour chaque cas une **solution concrète**.
+
+<Callout type="info" emoji="💡">
+  Le SDK `@kadryza/sdk` transforme automatiquement les erreurs API en classes d'erreur typées.
+  Vous pouvez les capturer avec `try/catch` et inspecter le code d'erreur.
+</Callout>
+
+---
+
+## Erreurs API (HTTP)
+
+### 400 — Requête invalide
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `VALIDATION_ERROR` | Un ou plusieurs paramètres sont manquants ou invalides | Vérifiez les champs requis dans la [référence API](/api-reference/transactions). Consultez le champ `fields` de la réponse pour identifier les paramètres problématiques. |
+
+**Exemple de réponse :**
+
+```json filename="400 Bad Request"
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Paramètres de requête invalides",
+    "status": 400,
+    "fields": {
+      "amount": "Le montant doit être un entier positif",
+      "phone_number": "Format invalide — utilisez +235XXXXXXXX"
+    }
+  }
+}
+```
+
+**Causes fréquentes :**
+- `amount` envoyé en décimal (ex: `5000.50`) au lieu d'un entier (`5000`)
+- `phone_number` sans le préfixe international (`66000000` au lieu de `+23566000000`)
+- `currency` différent de `"XAF"`
+- `operator` différent de `"AIRTEL"` ou `"MOOV"`
+- `reference` vide ou contenant des caractères spéciaux non supportés
+- `description` dépassant 255 caractères
+
+---
+
+### 401 — Non autorisé
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `UNAUTHORIZED` | La clé API est absente, invalide ou révoquée | Vérifiez que le header `Authorization: Bearer <clé>` est présent et que la clé est correcte. |
+
+**Exemple de réponse :**
+
+```json filename="401 Unauthorized"
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Clé API invalide ou expirée",
+    "status": 401
+  }
+}
+```
+
+**Checklist de débogage :**
+1. Vérifiez que le header est `Authorization: Bearer kadryza_live_xxx` (avec l'espace après `Bearer`)
+2. Vérifiez que la clé commence bien par `kadryza_live_`
+3. Vérifiez que la clé n'a pas été révoquée dans le dashboard
+4. Vérifiez que vous utilisez la bonne variable d'environnement (`process.env.KADRYZA_API_KEY`)
+5. Vérifiez que votre fichier `.env` est bien chargé (utilisez `dotenv` si nécessaire)
+
+```javascript filename="Vérification rapide"
+// Ajoutez ce log temporaire pour vérifier que la clé est bien chargée
+console.log('Clé API chargée:', process.env.KADRYZA_API_KEY ? '✅ Présente' : '❌ Absente')
+console.log('Préfixe correct:', process.env.KADRYZA_API_KEY?.startsWith('kadryza_live_') ? '✅ Oui' : '❌ Non')
+```
+
+---
+
+### 404 — Ressource introuvable
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `NOT_FOUND` | La transaction demandée n'existe pas | Vérifiez l'UUID de la transaction. Utilisez `GET /v1/transactions` pour lister vos transactions. |
+
+**Exemple de réponse :**
+
+```json filename="404 Not Found"
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Transaction introuvable",
+    "status": 404
+  }
+}
+```
+
+**Causes fréquentes :**
+- UUID mal copié ou tronqué
+- Transaction appartenant à un autre merchant (les clés API sont cloisonnées)
+- Transaction créée dans un autre environnement
+
+---
+
+### 409 — Conflit (doublon)
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `DUPLICATE_REFERENCE` | Une transaction avec cette `reference` existe déjà | Récupérez la transaction existante avec `GET /v1/transactions` en filtrant par référence. C'est le comportement attendu pour l'idempotence. |
+
+**Exemple de réponse :**
+
+```json filename="409 Conflict"
+{
+  "error": {
+    "code": "DUPLICATE_REFERENCE",
+    "message": "Une transaction avec la référence 'order_abc123' existe déjà",
+    "status": 409,
+    "existing_transaction_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }
+}
+```
+
+<Callout type="info" emoji="🔄">
+  **Ce n'est pas toujours une erreur.** Le système d'idempotence de Kadryza retourne la transaction existante
+  lorsque vous envoyez la même `reference` deux fois. C'est un mécanisme de sécurité contre les doublons.
+  Si vous avez besoin de créer une nouvelle transaction, utilisez une `reference` différente.
+</Callout>
+
+---
+
+### 422 — Entité non traitable
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `VALIDATION_ERROR` | Le format JSON est valide mais les données sont sémantiquement incorrectes | Consultez le champ `fields` pour identifier les erreurs de validation spécifiques. |
+
+**Exemple de réponse :**
+
+```json filename="422 Unprocessable Entity"
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Données de requête invalides",
+    "status": 422,
+    "fields": {
+      "amount": "Le montant minimum est 100 XAF",
+      "operator": "L'opérateur ORANGE n'est pas supporté au Tchad"
+    }
+  }
+}
+```
+
+**Différence avec 400 :**
+- **400** : le format de la requête est incorrect (JSON mal formé, champ manquant)
+- **422** : le format est correct mais les valeurs sont invalides (montant trop faible, opérateur non supporté)
+
+---
+
+### 503 — Service indisponible
+
+| Code erreur | Description | Solution |
+|---|---|---|
+| `GATEWAY_UNAVAILABLE` | La passerelle de paiement (Airtel/Moov) est temporairement indisponible | Attendez quelques minutes et réessayez. Si le problème persiste, vérifiez le [statut du service](https://dashboard.kadryza.app). |
+
+**Exemple de réponse :**
+
+```json filename="503 Service Unavailable"
+{
+  "error": {
+    "code": "GATEWAY_UNAVAILABLE",
+    "message": "La passerelle Airtel Money est temporairement indisponible",
+    "status": 503,
+    "retry_after": 60
+  }
+}
+```
+
+**Stratégie de retry recommandée :**
+
+```javascript filename="retry-strategy.js"
+import Kadryza from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+async function initierPaiementAvecRetry(params, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await kadryza.transactions.initiate(params)
+    } catch (error) {
+      if (error.code === 'GATEWAY_UNAVAILABLE' && attempt < maxRetries) {
+        // Backoff exponentiel : 1s, 4s, 9s
+        const delai = attempt * attempt * 1000
+        console.log(`Gateway indisponible — retry dans ${delai / 1000}s (tentative ${attempt}/${maxRetries})`)
+        await new Promise(resolve => setTimeout(resolve, delai))
+      } else {
+        throw error
+      }
+    }
+  }
+}
+
+// Utilisation
+const transaction = await initierPaiementAvecRetry({
+  reference: 'order_retry_001',
+  amount: 10000,
+  currency: 'XAF',
+  operator: 'MOOV',
+  phone_number: '+23566000000'
+})
+```
+
+---
+
+## Erreurs SDK
+
+Le SDK `@kadryza/sdk` encapsule les erreurs API dans des classes JavaScript typées.
+Chaque classe hérite de `KadryzaError` et contient les propriétés `code`, `message`, `status` et `fields`.
+
+### Tableau des classes d'erreur
+
+| Classe SDK | Code HTTP | Code erreur | Quand elle est levée |
+|---|---|---|---|
+| `KadryzaAuthError` | 401 | `UNAUTHORIZED` | Clé API invalide, absente ou révoquée |
+| `KadryzaValidationError` | 400 / 422 | `VALIDATION_ERROR` | Paramètres manquants ou invalides |
+| `KadryzaNotFoundError` | 404 | `NOT_FOUND` | Transaction introuvable |
+| `KadryzaDuplicateError` | 409 | `DUPLICATE_REFERENCE` | Référence de transaction déjà utilisée |
+| `KadryzaNetworkError` | — | `NETWORK_ERROR` | Impossible de joindre l'API (timeout, DNS, réseau) |
+| `KadryzaGatewayUnavailableError` | 503 | `GATEWAY_UNAVAILABLE` | Passerelle de paiement temporairement indisponible |
+
+### Gestion complète des erreurs
+
+```javascript filename="error-handling.js"
+import Kadryza, {
+  KadryzaAuthError,
+  KadryzaValidationError,
+  KadryzaNotFoundError,
+  KadryzaDuplicateError,
+  KadryzaNetworkError,
+  KadryzaGatewayUnavailableError
+} from '@kadryza/sdk'
+
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+async function traiterPaiement() {
+  try {
+    const transaction = await kadryza.transactions.initiate({
+      reference: 'order_err_demo',
+      amount: 7500,
+      currency: 'XAF',
+      operator: 'AIRTEL',
+      phone_number: '+23566000000',
+      description: 'Test gestion erreurs'
+    })
+
+    console.log('✅ Transaction créée:', transaction.id)
+    return transaction
+
+  } catch (error) {
+    if (error instanceof KadryzaAuthError) {
+      // 401 — Clé API invalide
+      console.error('🔐 Erreur d\'authentification:', error.message)
+      console.error('   → Vérifiez votre clé API dans le dashboard')
+      // Action : alerter l'équipe DevOps, la clé est peut-être révoquée
+
+    } else if (error instanceof KadryzaValidationError) {
+      // 400 / 422 — Paramètres invalides
+      console.error('📋 Erreur de validation:', error.message)
+      for (const [champ, message] of Object.entries(error.fields || {})) {
+        console.error(`   → ${champ}: ${message}`)
+      }
+      // Action : corriger les paramètres et réessayer
+
+    } else if (error instanceof KadryzaNotFoundError) {
+      // 404 — Transaction introuvable
+      console.error('🔍 Transaction introuvable:', error.message)
+      // Action : vérifier l'UUID ou lister les transactions
+
+    } else if (error instanceof KadryzaDuplicateError) {
+      // 409 — Doublon (idempotence)
+      console.error('🔄 Transaction déjà existante:', error.message)
+      // Action : récupérer la transaction existante
+      // Ce n'est généralement pas une erreur critique
+
+    } else if (error instanceof KadryzaGatewayUnavailableError) {
+      // 503 — Gateway indisponible
+      console.error('📡 Passerelle indisponible:', error.message)
+      console.error('   → Réessayez dans quelques minutes')
+      // Action : implémenter un retry avec backoff exponentiel
+
+    } else if (error instanceof KadryzaNetworkError) {
+      // Erreur réseau (pas de connexion, timeout)
+      console.error('🌐 Erreur réseau:', error.message)
+      console.error('   → Vérifiez votre connexion internet')
+      // Action : réessayer la requête
+
+    } else {
+      // Erreur inattendue
+      console.error('💥 Erreur inattendue:', error)
+      throw error
+    }
+  }
+}
+
+traiterPaiement()
+```
+
+---
+
+## Hiérarchie des classes d'erreur
+
+```
+Error
+ └── KadryzaError (classe de base)
+      ├── KadryzaAuthError          (401)
+      ├── KadryzaValidationError    (400, 422)
+      ├── KadryzaNotFoundError      (404)
+      ├── KadryzaDuplicateError     (409)
+      ├── KadryzaNetworkError       (réseau)
+      └── KadryzaGatewayUnavailableError (503)
+```
+
+Toutes les erreurs Kadryza héritent de `KadryzaError`. Vous pouvez capturer toutes les erreurs Kadryza
+avec un seul `catch` :
+
+```javascript filename="catch-all.js"
+import Kadryza, { KadryzaError } from '@kadryza/sdk'
+
+try {
+  const tx = await kadryza.transactions.initiate({ /* ... */ })
+} catch (error) {
+  if (error instanceof KadryzaError) {
+    // Toute erreur Kadryza (auth, validation, réseau, etc.)
+    console.error(`Erreur Kadryza [${error.code}]:`, error.message)
+  } else {
+    // Erreur non liée à Kadryza
+    throw error
+  }
+}
+```
+
+---
+
+## Référence rapide
+
+| HTTP | Code | Classe SDK | Cause | Action |
+|---|---|---|---|---|
+| 400 | `VALIDATION_ERROR` | `KadryzaValidationError` | Paramètres invalides | Corriger les champs (voir `error.fields`) |
+| 401 | `UNAUTHORIZED` | `KadryzaAuthError` | Clé API invalide | Vérifier la clé dans le dashboard |
+| 404 | `NOT_FOUND` | `KadryzaNotFoundError` | Ressource introuvable | Vérifier l'UUID |
+| 409 | `DUPLICATE_REFERENCE` | `KadryzaDuplicateError` | Référence déjà utilisée | Récupérer la transaction existante |
+| 422 | `VALIDATION_ERROR` | `KadryzaValidationError` | Données sémantiquement incorrectes | Lire `error.fields` |
+| 503 | `GATEWAY_UNAVAILABLE` | `KadryzaGatewayUnavailableError` | Passerelle hors ligne | Retry avec backoff exponentiel |
+| — | `NETWORK_ERROR` | `KadryzaNetworkError` | Pas de connexion réseau | Vérifier la connectivité |

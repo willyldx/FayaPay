@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	db "github.com/fayapay/faya-backend/internal/db/sqlc"
-	"github.com/fayapay/faya-backend/internal/models"
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/models"
 )
 
 // TimeoutHandler processes transaction expiry tasks.

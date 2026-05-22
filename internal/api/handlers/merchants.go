@@ -7,9 +7,9 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/fayapay/faya-backend/internal/api/middleware"
-	"github.com/fayapay/faya-backend/internal/models"
-	"github.com/fayapay/faya-backend/internal/services"
+	"github.com/kadryza/kadryza-backend/internal/api/middleware"
+	"github.com/kadryza/kadryza-backend/internal/models"
+	"github.com/kadryza/kadryza-backend/internal/services"
 )
 
 // MerchantHandler handles merchant authentication and API key management.

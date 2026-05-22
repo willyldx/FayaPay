@@ -1,4 +1,4 @@
-module github.com/fayapay/faya-backend
+module github.com/kadryza/kadryza-backend
 
 go 1.22
 

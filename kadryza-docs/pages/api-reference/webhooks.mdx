@@ -1,0 +1,570 @@
+---
+title: Webhooks
+description: Recevoir les notifications de paiement en temps réel — events, signatures, retry policy
+---
+
+import { Callout, Tabs } from 'nextra/components'
+import { StatusBadge } from '@/components/StatusBadge'
+
+# Webhooks
+
+Les webhooks vous permettent de recevoir des notifications **en temps réel** lorsque le statut
+d'une transaction change. C'est le mécanisme recommandé pour savoir quand un paiement a été confirmé,
+refusé ou expiré.
+
+---
+
+## Pourquoi les webhooks (et pas le polling)
+
+Le statut d'une transaction Mobile Money change de façon **asynchrone**. L'utilisateur confirme
+(ou refuse) le paiement depuis son téléphone, ce qui peut prendre de quelques secondes à 5 minutes.
+
+| Approche | Méthode | Problème |
+|----------|---------|----------|
+| ❌ **Polling** | `GET /v1/transactions/:id` toutes les 2s | Gaspille vos requêtes API, surcharge votre serveur, latence de détection |
+| ✅ **Webhook** | Kadryza vous notifie dès que le statut change | Temps réel, zéro requête inutile, fiable |
+
+```
+❌ Polling (à ne pas faire) :
+┌──────────┐  GET /v1/transactions/:id  ┌──────────┐
+│  Votre   │ ─────────────────────────▶ │ Kadryza  │
+│  serveur │ ◀───────── PENDING ─────── │   API    │
+│          │ ─────────────────────────▶ │          │
+│          │ ◀───────── PENDING ─────── │          │
+│          │ ─────────────────────────▶ │          │
+│          │ ◀───────── SUCCESS ─────── │          │
+└──────────┘    (3 requêtes gaspillées) └──────────┘
+
+✅ Webhook (recommandé) :
+┌──────────┐                            ┌──────────┐
+│  Votre   │                            │ Kadryza  │
+│  serveur │ ◀── POST transaction.success│   API    │
+│          │ ──── 200 OK ──────────────▶ │          │
+└──────────┘     (1 seule requête)       └──────────┘
+```
+
+---
+
+## Configuration
+
+### Ajouter un endpoint webhook
+
+1. Connectez-vous au [dashboard Kadryza](https://dashboard.kadryza.app)
+2. Accédez à **Webhooks** → **Ajouter un endpoint**
+3. Entrez l'URL de votre endpoint (ex: `https://votre-site.com/webhooks/kadryza`)
+4. Copiez le **secret de signature** généré
+
+<Callout type="warning" emoji="🔒">
+  Votre endpoint webhook **doit** utiliser HTTPS en production.
+  Kadryza ne livre pas de webhooks vers des URL HTTP non sécurisées.
+</Callout>
+
+---
+
+## Événements disponibles
+
+Kadryza émet 3 types d'événements webhook :
+
+| Événement | Statut associé | Quand il est émis |
+|-----------|----------------|-------------------|
+| `transaction.success` | <StatusBadge status="SUCCESS" /> | Le payeur a confirmé le paiement sur son téléphone |
+| `transaction.failed` | <StatusBadge status="FAILED" /> | Le paiement a été refusé (solde insuffisant, annulation, erreur opérateur) |
+| `transaction.timeout` | <StatusBadge status="TIMEOUT" /> | Le payeur n'a pas répondu dans les 5 minutes |
+
+<Callout type="info" emoji="ℹ️">
+  Le statut `EXPIRED` (expiration côté passerelle) **n'émet pas de webhook**.
+  Pour détecter ce cas, interrogez périodiquement l'API (`GET /v1/transactions/:id`)
+  pour les transactions restées en `PENDING` au-delà de leur `expires_at`.
+</Callout>
+
+---
+
+## Format du payload
+
+Chaque webhook est une requête `POST` envoyée à votre endpoint avec le payload JSON suivant.
+
+### `transaction.success`
+
+```json filename="Payload — transaction.success"
+{
+  "event": "transaction.success",
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "reference": "order_2025_001",
+    "internal_ref": "KADRYZA-A1B2C3D4",
+    "amount": 15000,
+    "currency": "XAF",
+    "operator": "AIRTEL",
+    "phone_number": "+23566000000",
+    "description": "Abonnement mensuel Premium",
+    "status": "SUCCESS",
+    "created_at": "2025-06-15T14:30:00Z",
+    "updated_at": "2025-06-15T14:31:12Z"
+  },
+  "timestamp": "2025-06-15T14:31:12Z"
+}
+```
+
+### `transaction.failed`
+
+```json filename="Payload — transaction.failed"
+{
+  "event": "transaction.failed",
+  "data": {
+    "id": "c3d4e5f6-a7b8-9012-cdef-234567890123",
+    "reference": "order_2025_002",
+    "internal_ref": "KADRYZA-C3D4E5F6",
+    "amount": 50000,
+    "currency": "XAF",
+    "operator": "MOOV",
+    "phone_number": "+23599000000",
+    "description": "Achat équipement",
+    "status": "FAILED",
+    "created_at": "2025-06-15T15:00:00Z",
+    "updated_at": "2025-06-15T15:00:45Z"
+  },
+  "timestamp": "2025-06-15T15:00:45Z"
+}
+```
+
+### `transaction.timeout`
+
+```json filename="Payload — transaction.timeout"
+{
+  "event": "transaction.timeout",
+  "data": {
+    "id": "d4e5f6a7-b8c9-0123-defa-345678901234",
+    "reference": "order_2025_003",
+    "internal_ref": "KADRYZA-D4E5F6A7",
+    "amount": 3000,
+    "currency": "XAF",
+    "operator": "AIRTEL",
+    "phone_number": "+23566111111",
+    "description": "Crédit téléphonique",
+    "status": "TIMEOUT",
+    "created_at": "2025-06-15T16:00:00Z",
+    "updated_at": "2025-06-15T16:05:00Z"
+  },
+  "timestamp": "2025-06-15T16:05:00Z"
+}
+```
+
+### Headers HTTP du webhook
+
+Chaque requête webhook inclut les headers suivants :
+
+| Header | Valeur | Description |
+|--------|--------|-------------|
+| `Content-Type` | `application/json` | Format du payload |
+| `X-Kadryza-Signature` | `sha256=<hmac_hex>` | Signature HMAC-SHA256 du payload |
+| `X-Kadryza-Event` | `transaction.success` | Type d'événement |
+| `X-Kadryza-Delivery-Id` | UUID | ID unique de cette livraison (utile pour l'idempotence) |
+| `User-Agent` | `Kadryza-Webhook/1.0` | Identifiant de l'expéditeur |
+
+---
+
+## Vérification de signature
+
+<Callout type="error" emoji="🔐">
+  **Obligatoire** — Vérifiez TOUJOURS la signature avant de traiter un webhook.
+  Sans cette vérification, un attaquant pourrait envoyer de fausses notifications
+  à votre endpoint et simuler des paiements réussis.
+</Callout>
+
+### Algorithme
+
+1. Kadryza calcule un **HMAC-SHA256** du body brut du webhook avec votre secret de signature
+2. Le résultat est préfixé par `sha256=` et placé dans le header `X-Kadryza-Signature`
+3. Votre serveur recalcule le HMAC avec le même secret et compare les deux valeurs
+
+```
+HMAC-SHA256(webhook_secret, raw_body) → hex_digest
+"sha256=" + hex_digest → signature attendue
+Comparer avec X-Kadryza-Signature (timing-safe)
+```
+
+### Implémentation
+
+<Tabs items={['Node.js SDK', 'Node.js natif (crypto)', 'Express.js complet']}>
+  <Tabs.Tab>
+```javascript filename="verify-sdk.js"
+import Kadryza from '@kadryza/sdk'
+import express from 'express'
+
+const app = express()
+const kadryza = new Kadryza({
+  apiKey: process.env.KADRYZA_API_KEY
+})
+
+app.post('/webhooks/kadryza', express.raw({ type: 'application/json' }), (req, res) => {
+  const signature = req.headers['x-kadryza-signature']
+  const payload = req.body.toString()
+
+  const isValid = kadryza.webhooks.verifySignature({
+    payload,
+    signature,
+    secret: process.env.KADRYZA_WEBHOOK_SECRET
+  })
+
+  if (!isValid) {
+    console.error('❌ Signature invalide — webhook rejeté')
+    return res.status(401).json({ error: 'Signature invalide' })
+  }
+
+  // Signature valide — traiter l'événement
+  res.status(200).json({ received: true })
+
+  const event = JSON.parse(payload)
+  console.log('✅ Webhook vérifié:', event.event, '—', event.data.reference)
+})
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```javascript filename="verify-native.js"
+import crypto from 'crypto'
+
+function verifyWebhookSignature(payload, signature, secret) {
+  // Calculer le HMAC attendu
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex')
+
+  // Comparer avec timing-safe pour éviter les attaques par timing
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    // Les buffers ont des longueurs différentes → signature invalide
+    return false
+  }
+}
+
+// Utilisation
+const payload = '{"event":"transaction.success","data":{...}}'
+const signature = req.headers['x-kadryza-signature']
+const secret = process.env.KADRYZA_WEBHOOK_SECRET
+
+if (verifyWebhookSignature(payload, signature, secret)) {
+  console.log('✅ Signature valide')
+} else {
+  console.log('❌ Signature invalide — ne pas traiter')
+}
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+```javascript filename="webhook-server.js"
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+
+// IMPORTANT : express.raw() AVANT express.json()
+// pour préserver le body brut pour la vérification
+app.post('/webhooks/kadryza', express.raw({ type: 'application/json' }), (req, res) => {
+  // 1. Extraire la signature du header
+  const signature = req.headers['x-kadryza-signature']
+  if (!signature) {
+    return res.status(400).json({ error: 'Header X-Kadryza-Signature manquant' })
+  }
+
+  // 2. Recalculer le HMAC
+  const payload = req.body.toString()
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', process.env.KADRYZA_WEBHOOK_SECRET)
+    .update(payload)
+    .digest('hex')
+
+  // 3. Comparer (timing-safe)
+  let isValid = false
+  try {
+    isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    isValid = false
+  }
+
+  if (!isValid) {
+    console.error('❌ Signature webhook invalide')
+    return res.status(401).json({ error: 'Signature invalide' })
+  }
+
+  // 4. Répondre 200 IMMÉDIATEMENT
+  res.status(200).json({ received: true })
+
+  // 5. Traiter l'événement en async
+  const event = JSON.parse(payload)
+  const deliveryId = req.headers['x-kadryza-delivery-id']
+
+  // 6. Vérifier l'idempotence (éviter de traiter le même event 2 fois)
+  // Utiliser le X-Kadryza-Delivery-Id comme clé unique
+  processWebhookAsync(event, deliveryId)
+})
+
+async function processWebhookAsync(event, deliveryId) {
+  // Vérifier si cet event a déjà été traité
+  const dejaTraite = await db.webhookLogs.findOne({ delivery_id: deliveryId })
+  if (dejaTraite) {
+    console.log('🔄 Webhook déjà traité, ignoré:', deliveryId)
+    return
+  }
+
+  // Marquer comme traité
+  await db.webhookLogs.insert({
+    delivery_id: deliveryId,
+    event: event.event,
+    reference: event.data.reference,
+    processed_at: new Date()
+  })
+
+  // Traiter selon le type d'événement
+  switch (event.event) {
+    case 'transaction.success':
+      await db.commandes.updateOne(
+        { reference: event.data.reference },
+        {
+          statut: 'PAYE',
+          paye_le: event.timestamp,
+          montant_recu: event.data.amount
+        }
+      )
+      console.log('✅ Commande', event.data.reference, 'marquée comme payée')
+      // Envoyer un email de confirmation, démarrer la livraison, etc.
+      break
+
+    case 'transaction.failed':
+      await db.commandes.updateOne(
+        { reference: event.data.reference },
+        { statut: 'PAIEMENT_ECHOUE' }
+      )
+      console.log('❌ Paiement échoué pour', event.data.reference)
+      // Notifier le client, proposer un nouveau paiement
+      break
+
+    case 'transaction.timeout':
+      await db.commandes.updateOne(
+        { reference: event.data.reference },
+        { statut: 'PAIEMENT_EXPIRE' }
+      )
+      console.log('⏰ Paiement expiré pour', event.data.reference)
+      // Proposer de réessayer le paiement
+      break
+  }
+}
+
+app.listen(3000, () => {
+  console.log('🚀 Webhook handler actif sur le port 3000')
+})
+```
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="warning" emoji="⚠️">
+  **Piège courant avec Express.js** — Si vous utilisez `express.json()` comme middleware global,
+  il parse le body avant votre handler webhook. Le body brut est alors perdu et la vérification
+  de signature échoue. Utilisez `express.raw({ type: 'application/json' })` **spécifiquement**
+  sur votre route webhook.
+</Callout>
+
+---
+
+## Retry policy (politique de réessai)
+
+Si votre endpoint ne répond pas avec un code HTTP `2xx`, Kadryza **réessaie** automatiquement
+la livraison du webhook.
+
+### Calendrier des tentatives
+
+| Tentative | Délai après l'échec précédent | Délai total depuis le premier envoi |
+|-----------|-------------------------------|-------------------------------------|
+| 1ère (initial) | — | 0 |
+| 2ème | 1 minute | 1 minute |
+| 3ème | 5 minutes | 6 minutes |
+| 4ème | 30 minutes | 36 minutes |
+| 5ème (dernière) | 2 heures | 2h 36min |
+
+### Qu'est-ce qu'un échec ?
+
+| Situation | Considéré comme |
+|-----------|-----------------|
+| Réponse HTTP `200` – `299` | ✅ Succès — plus de retry |
+| Réponse HTTP `3xx` (redirection) | ❌ Échec — retry |
+| Réponse HTTP `4xx` (erreur client) | ❌ Échec — retry |
+| Réponse HTTP `5xx` (erreur serveur) | ❌ Échec — retry |
+| Timeout (pas de réponse en 10s) | ❌ Échec — retry |
+| Erreur DNS / connexion refusée | ❌ Échec — retry |
+
+<Callout type="info" emoji="💡">
+  Après 5 tentatives échouées, le webhook est marqué comme **non délivré** dans votre dashboard.
+  Vous pouvez le relancer manuellement depuis **Webhooks** → **Historique**.
+</Callout>
+
+---
+
+## Bonnes pratiques
+
+### 1. Répondre `200` immédiatement
+
+Votre endpoint doit répondre HTTP `200` **le plus vite possible** (idéalement en moins de 500ms).
+Traitez l'événement **après** avoir répondu.
+
+```javascript filename="Bon exemple"
+app.post('/webhooks/kadryza', handler, (req, res) => {
+  // ✅ Répondre immédiatement
+  res.status(200).json({ received: true })
+
+  // Puis traiter en async
+  processEvent(req.event)
+})
+```
+
+```javascript filename="Mauvais exemple"
+app.post('/webhooks/kadryza', handler, async (req, res) => {
+  // ❌ NE PAS faire ça — le traitement prend trop de temps
+  await updateDatabase(req.event)
+  await sendEmail(req.event)
+  await notifySlack(req.event)
+
+  // Kadryza a peut-être déjà timeout et va retry
+  res.status(200).json({ received: true })
+})
+```
+
+### 2. Gérer l'idempotence
+
+Le même webhook peut arriver **plusieurs fois** (retry, doublon réseau).
+Utilisez le header `X-Kadryza-Delivery-Id` pour dédupliquer.
+
+```javascript filename="Idempotence webhook"
+app.post('/webhooks/kadryza', handler, async (req, res) => {
+  res.status(200).json({ received: true })
+
+  const deliveryId = req.headers['x-kadryza-delivery-id']
+
+  // Vérifier si déjà traité
+  const existe = await db.webhookDeliveries.findOne({ id: deliveryId })
+  if (existe) {
+    console.log('Webhook déjà traité, ignoré')
+    return
+  }
+
+  // Marquer comme traité AVANT de traiter (éviter les races)
+  await db.webhookDeliveries.insert({ id: deliveryId, processed_at: new Date() })
+
+  // Traiter
+  await processEvent(req.event)
+})
+```
+
+### 3. Vérifier la signature (toujours)
+
+Ne faites **jamais** confiance au contenu d'un webhook sans vérifier la signature.
+Voir la [section vérification de signature](#vérification-de-signature) ci-dessus.
+
+### 4. Logger tous les webhooks
+
+Conservez un log de tous les webhooks reçus (payload, signature, statut de traitement).
+C'est indispensable pour le débogage.
+
+```javascript filename="Logging"
+async function processWebhook(event, deliveryId) {
+  // Logger l'événement brut
+  await db.webhookLogs.insert({
+    delivery_id: deliveryId,
+    event_type: event.event,
+    payload: event,
+    received_at: new Date(),
+    processed: false
+  })
+
+  try {
+    await handleEvent(event)
+    await db.webhookLogs.updateOne(
+      { delivery_id: deliveryId },
+      { processed: true, processed_at: new Date() }
+    )
+  } catch (error) {
+    await db.webhookLogs.updateOne(
+      { delivery_id: deliveryId },
+      { processed: false, error: error.message }
+    )
+    // Ne pas throw — on a déjà répondu 200
+    console.error('Erreur traitement webhook:', error)
+  }
+}
+```
+
+---
+
+## Tester les webhooks localement
+
+En développement, votre `localhost` n'est pas accessible depuis Internet.
+Utilisez **ngrok** pour exposer votre serveur local.
+
+### Installation et utilisation de ngrok
+
+```bash filename="Terminal — Installation"
+# macOS
+brew install ngrok
+
+# Windows (chocolatey)
+choco install ngrok
+
+# Linux (snap)
+snap install ngrok
+```
+
+```bash filename="Terminal — Lancer le tunnel"
+# Démarrer votre serveur sur le port 3000
+node webhook-server.js
+
+# Dans un autre terminal, exposer le port 3000
+ngrok http 3000
+```
+
+ngrok affiche une URL publique temporaire :
+
+```
+Session Status   online
+Forwarding       https://a1b2c3d4.ngrok-free.app → http://localhost:3000
+```
+
+### Configurer l'URL dans le dashboard
+
+1. Copiez l'URL ngrok : `https://a1b2c3d4.ngrok-free.app/webhooks/kadryza`
+2. Dans le dashboard, accédez à **Webhooks** → **Ajouter un endpoint**
+3. Collez l'URL ngrok comme endpoint
+4. Initiez une transaction de test
+
+<Callout type="warning" emoji="⚠️">
+  L'URL ngrok change à chaque redémarrage (version gratuite).
+  Pensez à mettre à jour l'URL dans le dashboard après chaque redémarrage de ngrok.
+</Callout>
+
+### Vérifier la réception
+
+```bash filename="Terminal — Logs de votre serveur"
+🚀 Webhook handler actif sur le port 3000
+✅ Webhook vérifié: transaction.success — order_2025_001
+```
+
+Vous pouvez aussi consulter l'**inspecteur ngrok** sur `http://localhost:4040` pour voir
+les requêtes entrantes, les headers et les payloads en temps réel.
+
+---
+
+## Récapitulatif
+
+| Aspect | Détail |
+|--------|--------|
+| **Événements** | `transaction.success`, `transaction.failed`, `transaction.timeout` |
+| **Méthode** | `POST` vers votre URL |
+| **Format** | JSON avec `event`, `data`, `timestamp` |
+| **Signature** | HMAC-SHA256 dans `X-Kadryza-Signature` |
+| **Retry** | 5 tentatives : immédiat → 1min → 5min → 30min → 2h |
+| **Timeout** | 10 secondes pour répondre |
+| **Protocole** | HTTPS obligatoire en production |

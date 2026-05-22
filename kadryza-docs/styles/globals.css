@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   Kadryza Documentation — Custom Styles
+   ================================================================ */
+
+/* ---- Global typography ---- */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Custom scrollbar (dark mode friendly) ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(249, 115, 22, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.5);
+}
+
+/* ---- Nextra theme overrides ---- */
+
+/* Sidebar active link accent */
+.nextra-sidebar-container a.active {
+  color: #F97316;
+}
+
+/* Code block enhancements */
+pre {
+  border: 1px solid rgba(249, 115, 22, 0.1);
+}
+
+.dark pre {
+  border-color: rgba(249, 115, 22, 0.15);
+}
+
+/* Callout / admonition accent */
+.nextra-callout {
+  border-left-color: #F97316;
+}
+
+/* ---- Smooth page transitions ---- */
+.nextra-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Custom utility classes for MDX content ---- */
+
+.kadryza-gradient-text {
+  background: linear-gradient(135deg, #F97316, #EA580C);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.kadryza-card {
+  @apply rounded-xl border border-gray-200 p-6 transition-all duration-200;
+  @apply hover:border-kadryza-400 hover:shadow-lg hover:shadow-kadryza-500/10;
+}
+
+.dark .kadryza-card {
+  @apply border-gray-700;
+  @apply hover:border-kadryza-500 hover:shadow-kadryza-500/5;
+}
+
+.kadryza-badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+.kadryza-badge-get {
+  @apply bg-emerald-100 text-emerald-800;
+}
+
+.dark .kadryza-badge-get {
+  @apply bg-emerald-900/30 text-emerald-400;
+}
+
+.kadryza-badge-post {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.dark .kadryza-badge-post {
+  @apply bg-blue-900/30 text-blue-400;
+}
+
+.kadryza-badge-delete {
+  @apply bg-red-100 text-red-800;
+}
+
+.dark .kadryza-badge-delete {
+  @apply bg-red-900/30 text-red-400;
+}
+
+.kadryza-badge-patch {
+  @apply bg-amber-100 text-amber-800;
+}
+
+.dark .kadryza-badge-patch {
+  @apply bg-amber-900/30 text-amber-400;
+}
