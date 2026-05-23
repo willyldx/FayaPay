@@ -84,8 +84,7 @@ export function Sidebar() {
                 >
                   <item.icon className={cn(
                     "shrink-0",
-                    isSidebarCollapsed ? "h-6 w-6" : "h-5 w-5",
-                    isActive ? "text-primary" : ""
+                    isSidebarCollapsed ? "h-6 w-6" : "h-5 w-5"
                   )} />
                   {!isSidebarCollapsed && <span className="truncate">{item.name}</span>}
                 </Link>
@@ -102,7 +101,7 @@ export function Sidebar() {
             <DropdownMenuTrigger asChild>
               <button className={cn("flex w-full items-center rounded-lg transition-colors hover:bg-sidebar-accent/50", isSidebarCollapsed ? "justify-center py-2" : "gap-3 px-3 py-2.5 text-sm")}>
                 <Avatar className={isSidebarCollapsed ? "h-9 w-9 shrink-0" : "h-8 w-8 shrink-0"}>
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold uppercase">
+                  <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground text-xs font-semibold uppercase">
                     {merchant.name.substring(0, 2)}
                   </AvatarFallback>
                 </Avatar>

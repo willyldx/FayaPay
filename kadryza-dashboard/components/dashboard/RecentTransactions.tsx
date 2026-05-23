@@ -90,8 +90,12 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                {transactions.map((tx, index) => (
+                  <tr 
+                    key={tx.id} 
+                    className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors opacity-0 animate-fade-in-up"
+                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'forwards' }}
+                  >
                     <td className="px-6 py-3 font-mono text-xs text-foreground">
                       <Link href={`/transactions/${tx.id}`} className="hover:text-primary transition-colors">
                         {tx.reference}

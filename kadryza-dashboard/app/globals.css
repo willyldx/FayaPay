@@ -38,7 +38,7 @@
     --sidebar-accent-foreground: oklch(0.95 0 0);
     --sidebar-border: oklch(0.25 0.01 250);
     --sidebar-ring: oklch(0.145 0 0);
-    --sidebar-muted: oklch(0.45 0 0);
+    --sidebar-muted: oklch(0.65 0 0);
   }
 
   .dark {
@@ -74,7 +74,7 @@
     --sidebar-accent-foreground: oklch(0.95 0 0);
     --sidebar-border: oklch(0.22 0.01 250);
     --sidebar-ring: oklch(0.985 0 0);
-    --sidebar-muted: oklch(0.45 0 0);
+    --sidebar-muted: oklch(0.65 0 0);
   }
 }
 
@@ -140,11 +140,11 @@
 @layer components {
   /* Carte standard du dashboard */
   .card {
-    @apply bg-surface rounded-xl border border-slate-200 shadow-card;
+    @apply bg-surface rounded-xl border border-slate-200 shadow-card transition-all duration-300;
   }
 
   .card-hover {
-    @apply card transition-shadow duration-200 hover:shadow-card-hover;
+    @apply card hover:shadow-card-hover hover:-translate-y-1;
   }
 
   /* Badge de statut */
@@ -155,14 +155,27 @@
 
   /* Bouton primaire Kadryza */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2
-           rounded-lg bg-kadryza-500 px-4 py-2.5
-           text-sm font-medium text-white
+    @apply relative overflow-hidden inline-flex items-center justify-center gap-2
+           rounded-lg bg-primary px-4 py-2.5
+           text-sm font-medium text-primary-foreground
            shadow-sm
            transition-all duration-200
-           hover:bg-kadryza-600
-           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kadryza-500
-           disabled:opacity-50 disabled:cursor-not-allowed;
+           hover:opacity-90 hover:shadow-md
+           active:scale-[0.98]
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .btn-primary::after {
+    content: '';
+    @apply absolute top-0 w-[50%] h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg];
+    left: -100%;
+    transition: left 0.5s ease-out;
+  }
+
+  .btn-primary:hover::after {
+    left: 200%;
+    transition: left 0.7s ease-out;
   }
 
   /* Bouton secondaire */
@@ -172,9 +185,10 @@
            text-sm font-medium text-slate-700
            shadow-sm
            transition-all duration-200
-           hover:bg-slate-50
-           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kadryza-500
-           disabled:opacity-50 disabled:cursor-not-allowed;
+           hover:bg-slate-50 hover:shadow-md
+           active:scale-[0.98]
+           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
 
   /* Bouton danger */
@@ -184,9 +198,10 @@
            text-sm font-medium text-white
            shadow-sm
            transition-all duration-200
-           hover:bg-red-600
+           hover:bg-red-600 hover:shadow-md
+           active:scale-[0.98]
            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500
-           disabled:opacity-50 disabled:cursor-not-allowed;
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
 
   /* Bouton ghost (sidebar nav) */
@@ -195,7 +210,8 @@
            rounded-lg px-3 py-2
            text-sm font-medium text-slate-600
            transition-colors duration-150
-           hover:bg-slate-100 hover:text-slate-900;
+           hover:bg-slate-100 hover:text-slate-900
+           active:scale-[0.98];
   }
 
   /* Input de formulaire */
@@ -206,7 +222,7 @@
            placeholder:text-slate-400
            shadow-sm
            transition-colors duration-150
-           focus:border-kadryza-500 focus:ring-2 focus:ring-kadryza-500/20 focus:outline-none
+           focus:border-primary focus:ring-2 focus:ring-slate-900/20 focus:outline-none
            disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed;
   }
 
