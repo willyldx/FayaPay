@@ -114,6 +114,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 
 	// JWT-protected auth routes.
 	authProtected := auth.Group("", middleware.JWTAuth(deps.Config.JWTSecret))
+	authProtected.Get("/api-keys", merchantHandler.ListAPIKeys)
 	authProtected.Post("/api-keys", merchantHandler.GenerateAPIKey)
 	authProtected.Delete("/api-keys/:id", merchantHandler.RevokeAPIKey)
 	authProtected.Get("/me", merchantHandler.GetProfile)
@@ -144,4 +145,15 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	)
 	gw.Get("/ws", gatewayHandler.UpgradeCheck, gatewayHandler.HandleWebSocket())
 	gw.Get("/status", gatewayHandler.Status)
+
+	// --- Dashboard routes (JWT auth) — lecture seule pour le portail merchant ---
+	// Ces routes permettent au dashboard web d'afficher les données via JWT Bearer.
+	dashboard := v1.Group("/dashboard", middleware.JWTAuth(deps.Config.JWTSecret))
+	dashboard.Get("/transactions", transactionHandler.List)
+	dashboard.Get("/transactions/:id", transactionHandler.GetByID)
+	dashboard.Get("/webhooks", webhookHandler.List)
+	dashboard.Post("/webhooks", webhookHandler.Create)
+	dashboard.Delete("/webhooks/:id", webhookHandler.Delete)
+	dashboard.Post("/webhooks/:id/test", webhookHandler.Test)
+	dashboard.Get("/gateway/status", gatewayHandler.Status)
 }

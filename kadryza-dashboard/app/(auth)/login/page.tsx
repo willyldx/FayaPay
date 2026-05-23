@@ -6,26 +6,19 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
 import { loginSchema, type LoginFormData } from '@/lib/utils/validators'
 import { login } from '@/lib/api/merchants'
+import { setAuthToken } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/stores/authStore'
-
-// =============================================================================
-// Page Login — Suspense boundary pour useSearchParams (Next.js 14)
-// =============================================================================
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="card p-8 h-[420px] animate-pulse" />}>
+    <Suspense fallback={<div className="h-[350px] w-full animate-pulse rounded-xl border bg-card shadow-sm" />}>
       <LoginForm />
     </Suspense>
   )
 }
-
-// =============================================================================
-// LoginForm — Formulaire de connexion
-// =============================================================================
 
 function LoginForm() {
   const router = useRouter()
@@ -40,24 +33,16 @@ function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    defaultValues: { email: '', password: '' },
   })
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       const response = await login(data)
+      setAuthToken(response.token, response.expires_at)
       setMerchant(response.merchant)
-
-      // [C-1 FIX] Valider que la redirection est un chemin local (pas d'URL absolue)
-      // Empêche les open redirect attacks via ?redirect=https://evil.com
       const rawRedirect = searchParams.get('redirect') ?? '/'
-      const redirect =
-        rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')
-          ? rawRedirect
-          : '/'
+      const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/'
       router.push(redirect)
     } catch (error) {
       if (error instanceof Error) {
@@ -69,93 +54,87 @@ function LoginForm() {
   }
 
   return (
-    <div className="card p-8 animate-in">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-900">
-          Connexion
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Accédez à votre espace merchant Kadryza
-        </p>
-      </div>
-
-      {/* Formulaire */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-        {/* Email */}
-        <div>
-          <label htmlFor="login-email" className="label">
-            Adresse email
-          </label>
-          <input
-            id="login-email"
-            type="email"
-            autoComplete="email"
-            placeholder="vous@entreprise.com"
-            className={`input ${errors.email ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''}`}
-            {...register('email')}
-          />
-          {errors.email && (
-            <p className="field-error">{errors.email.message}</p>
-          )}
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+        <div className="flex flex-col space-y-1.5 p-6 pb-4">
+          <h1 className="text-xl font-semibold leading-none tracking-tight">Connexion</h1>
+          <p className="text-sm text-muted-foreground">Entrez vos identifiants pour accéder à votre espace.</p>
         </div>
+        <div className="p-6 pt-0">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+            <div className="space-y-2">
+              <label htmlFor="login-email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Email
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="m@example.com"
+                className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                {...register('email')}
+              />
+              {errors.email && <p className="text-[0.8rem] font-medium text-destructive">{errors.email.message}</p>}
+            </div>
 
-        {/* Mot de passe */}
-        <div>
-          <label htmlFor="login-password" className="label">
-            Mot de passe
-          </label>
-          <div className="relative">
-            <input
-              id="login-password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              className={`input pr-11 ${errors.password ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''}`}
-              {...register('password')}
-            />
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <label htmlFor="login-password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  Mot de passe
+                </label>
+                <Link href="#" className="ml-auto inline-block text-sm underline opacity-0 pointer-events-none">
+                  Oublié?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 pr-9 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${errors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              </div>
+              {errors.password && <p className="text-[0.8rem] font-medium text-destructive">{errors.password.message}</p>}
+            </div>
+
             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-              tabIndex={-1}
-              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              type="submit"
+              disabled={isSubmitting}
+              className="group relative inline-flex h-10 w-full mt-2 items-center justify-center overflow-hidden rounded-md bg-primary px-6 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-300 hover:bg-primary/90 hover:ring-2 hover:ring-primary/20 hover:ring-offset-1 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
-              {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+              <div className="absolute inset-0 flex h-full w-full justify-center [transform:skew(-12deg)_translateX(-150%)] group-hover:duration-1000 group-hover:[transform:skew(-12deg)_translateX(150%)]">
+                <div className="relative h-full w-12 bg-white/20" />
+              </div>
+              <span className="relative flex items-center gap-2">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Connexion...
+                  </>
+                ) : (
+                  <>
+                    Se connecter
+                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </>
+                )}
+              </span>
             </button>
-          </div>
-          {errors.password && (
-            <p className="field-error">{errors.password.message}</p>
-          )}
+          </form>
         </div>
-
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="btn-primary w-full"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Connexion en cours…
-            </>
-          ) : (
-            'Se connecter'
-          )}
-        </button>
-      </form>
-
-      {/* Lien inscription */}
-      <p className="mt-6 text-center text-sm text-slate-500">
+      </div>
+      <div className="text-center text-sm text-muted-foreground">
         Pas encore de compte ?{' '}
-        <Link
-          href="/register"
-          className="font-medium text-kadryza-500 hover:text-kadryza-600 transition-colors"
-        >
-          Créer un compte
+        <Link href="/register" className="underline underline-offset-4 hover:text-primary">
+          S'inscrire
         </Link>
-      </p>
+      </div>
     </div>
   )
 }

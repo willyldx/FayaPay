@@ -142,6 +142,39 @@ func (h *MerchantHandler) GenerateAPIKey(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(resp)
 }
 
+// ListAPIKeys handles GET /v1/auth/api-keys
+func (h *MerchantHandler) ListAPIKeys(c *fiber.Ctx) error {
+	merchantID, ok := middleware.GetMerchantID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "authentication required",
+			"code":  "AUTH_REQUIRED",
+		})
+	}
+
+	merchant, err := h.service.GetByID(c.Context(), merchantID)
+	if err != nil {
+		h.logger.Error("failed to get merchant for api keys", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "internal error",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	var keys []map[string]interface{}
+	if merchant.APIKeyPrefix != nil {
+		keys = append(keys, map[string]interface{}{
+			"id":         merchant.ID.String(),
+			"prefix":     *merchant.APIKeyPrefix,
+			"created_at": merchant.UpdatedAt,
+		})
+	} else {
+		keys = make([]map[string]interface{}, 0)
+	}
+
+	return c.JSON(keys)
+}
+
 // RevokeAPIKey handles DELETE /v1/auth/api-keys/:id
 func (h *MerchantHandler) RevokeAPIKey(c *fiber.Ctx) error {
 	merchantID, ok := middleware.GetMerchantID(c)

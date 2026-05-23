@@ -1,0 +1,13 @@
+[Unit]
+Description=Kadryza Backend API
+After=network.target postgresql.service redis-server.service
+
+[Service]
+User=spencer
+WorkingDirectory=/opt/kadryza
+ExecStart=/opt/kadryza/kadryza-server
+Restart=always
+EnvironmentFile=/opt/kadryza/backend.env
+
+[Install]
+WantedBy=multi-user.target

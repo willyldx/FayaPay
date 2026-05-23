@@ -1,0 +1,145 @@
+---
+title: Référence API
+description: API REST Kadryza — Introduction, URL de base, authentification et conventions
+---
+
+import { Callout, Cards, Card } from 'nextra/components'
+
+# Référence API
+
+L'API REST Kadryza vous permet d'initier des paiements Mobile Money, de consulter le statut
+des transactions et de gérer les webhooks de manière programmatique.
+
+---
+
+## URL de base
+
+```
+https://api.kadryza.app
+```
+
+Toutes les requêtes API utilisent cette URL comme préfixe. Les endpoints sont versionnés :
+
+```
+https://api.kadryza.app/v1/transactions
+https://api.kadryza.app/v1/transactions/:id
+```
+
+---
+
+## Authentification
+
+Chaque requête doit inclure votre clé API dans le header `Authorization` :
+
+```
+Authorization: Bearer kadryza_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Consultez le [guide d'authentification](/authentication) pour les détails complets.
+
+---
+
+## Format des requêtes
+
+| Aspect | Convention |
+|--------|-----------|
+| **Content-Type** | `application/json` |
+| **Encoding** | UTF-8 |
+| **Méthodes** | `GET`, `POST` |
+| **Dates** | ISO 8601 (`2025-06-15T14:30:00Z`) |
+| **Montants** | Entiers en XAF (pas de décimales) |
+| **IDs** | UUID v4 |
+
+---
+
+## Format des réponses
+
+Toutes les réponses sont en JSON. Les réponses réussies contiennent directement les données :
+
+```json filename="Réponse réussie (200 / 201)"
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "reference": "order_2025_001",
+  "status": "PENDING"
+}
+```
+
+Les réponses d'erreur suivent un format uniforme :
+
+```json filename="Réponse d'erreur (4xx / 5xx)"
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Description lisible de l'erreur",
+    "status": 400,
+    "fields": {
+      "amount": "Le montant doit être un entier positif"
+    }
+  }
+}
+```
+
+Consultez la page [codes d'erreur](/errors) pour la liste exhaustive.
+
+---
+
+## Pagination
+
+Les endpoints qui retournent des listes utilisent une pagination par page :
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `page` | integer | 1 | Numéro de la page |
+| `per_page` | integer | 20 | Résultats par page (max 100) |
+
+```json filename="Structure de pagination"
+{
+  "data": [ /* ... résultats ... */ ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total": 142,
+    "total_pages": 8
+  }
+}
+```
+
+---
+
+## Rate limiting
+
+L'API applique des limites de requêtes pour garantir la stabilité du service :
+
+| Limite | Valeur |
+|--------|--------|
+| Requêtes par minute | 60 |
+| Requêtes par heure | 1 000 |
+
+En cas de dépassement, l'API retourne `429 Too Many Requests` avec un header `Retry-After`.
+
+---
+
+## Endpoints disponibles
+
+<Cards>
+  <Cards.Card
+    icon={<span style={{ fontSize: '1.5em' }}>💳</span>}
+    title="Transactions"
+    href="/api-reference/transactions"
+  >
+    Initier un paiement, récupérer une transaction, lister les transactions avec filtres et pagination.
+  </Cards.Card>
+  <Cards.Card
+    icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
+    title="Webhooks"
+    href="/api-reference/webhooks"
+  >
+    Recevoir les notifications en temps réel, vérifier les signatures, gérer les retries.
+  </Cards.Card>
+</Cards>
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `POST` | `/v1/transactions` | [Initier un paiement](/api-reference/transactions#initier-un-paiement) |
+| `GET` | `/v1/transactions/:id` | [Récupérer une transaction](/api-reference/transactions#récupérer-une-transaction) |
+| `GET` | `/v1/transactions` | [Lister les transactions](/api-reference/transactions#lister-les-transactions) |

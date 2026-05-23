@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react'
 import { useAuthStore } from '@/lib/stores/authStore'
+import { useUiStore } from '@/lib/stores/uiStore'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { cn } from '@/lib/utils'
 
 // =============================================================================
 // Dashboard Layout — Sidebar (desktop) + Header (mobile) + contenu
@@ -21,6 +23,8 @@ export default function DashboardLayout({
   useEffect(() => {
     hydrate()
   }, [hydrate])
+
+  const isSidebarCollapsed = useUiStore((s) => s.isSidebarCollapsed)
 
   // Skeleton pendant l'hydratation
   if (!isHydrated) {
@@ -40,7 +44,7 @@ export default function DashboardLayout({
       <Sidebar />
 
       {/* Zone principale */}
-      <div className="flex flex-1 flex-col lg:pl-[280px]">
+      <div className={cn("flex flex-1 flex-col transition-all duration-300", isSidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
         {/* Header — Mobile (hidden desktop) */}
         <Header />
 

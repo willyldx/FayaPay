@@ -104,7 +104,7 @@ func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transacti
 			// Transaction already moved to a final state — skip.
 			h.logger.Info("transaction already finalized, skipping timeout",
 				zap.String("transaction_id", txn.ID.String()),
-				zap.String("current_status", string(txn.Status)),
+				zap.String("current_status", fmt.Sprint(txn.Status)),
 			)
 			return nil
 		}
@@ -113,13 +113,13 @@ func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transacti
 
 	// Audit log — every status change must produce an audit entry (PRD rule #6).
 	auditPayload, _ := json.Marshal(map[string]string{
-		"from":   string(txn.Status),
+		"from":   fmt.Sprint(txn.Status),
 		"to":     "TIMEOUT",
 		"reason": failureReason,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: &txn.ID,
-		MerchantID:    &txn.MerchantID,
+		TransactionID: txn.ID,
+		MerchantID:    txn.MerchantID,
 		EventType:     models.AuditEventTransactionTimeout,
 		Payload:       auditPayload,
 	})
@@ -136,7 +136,7 @@ func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transacti
 
 	h.logger.Info("transaction expired",
 		zap.String("transaction_id", txn.ID.String()),
-		zap.String("previous_status", string(txn.Status)),
+		zap.String("previous_status", fmt.Sprint(txn.Status)),
 	)
 
 	return nil

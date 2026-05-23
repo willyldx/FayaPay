@@ -1,49 +1,21 @@
 import type { Metadata } from 'next'
 
-// =============================================================================
-// Auth Layout — Centré, fond gris clair, logo Kadryza
-// =============================================================================
-
 export const metadata: Metadata = {
   title: 'Authentification | Kadryza',
 }
 
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12">
-      {/* Logo Kadryza */}
-      <div className="mb-8 flex items-center gap-2.5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-kadryza-500 shadow-md">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="h-6 w-6 text-white"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
+    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-slate-50 p-6 md:p-10">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <div className="flex justify-center">
+          <img src="/logo-full.svg" alt="Kadryza" className="h-8 w-auto" />
         </div>
-        <span className="text-2xl font-bold tracking-tight text-slate-900">
-          Kadryza
-        </span>
-      </div>
-
-      {/* Contenu (formulaire login ou register) */}
-      <div className="w-full max-w-[420px]">
         {children}
+        <div className="text-center text-xs text-muted-foreground">
+          &copy; {new Date().getFullYear()} Kadryza. Tous droits réservés.
+        </div>
       </div>
-
-      {/* Footer */}
-      <p className="mt-8 text-center text-xs text-slate-400">
-        © {new Date().getFullYear()} Kadryza. Tous droits réservés.
-      </p>
     </div>
   )
 }

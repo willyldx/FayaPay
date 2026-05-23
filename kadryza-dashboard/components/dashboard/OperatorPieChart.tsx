@@ -1,11 +1,13 @@
-'use client'
+"use client"
 
-import { DonutChart } from '@tremor/react'
-import type { OperatorMetric } from '@/lib/types'
-import { formatAmountShort } from '@/lib/utils/format'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
+import type { OperatorMetric } from "@/lib/types"
+import { Skeleton } from "@/components/ui/skeleton"
+import { formatAmountShort } from "@/lib/utils/format"
 
 // =============================================================================
-// OperatorPieChart — Répartition Airtel vs Moov (Tremor DonutChart)
+// OperatorPieChart (New ProviderChart Design)
 // =============================================================================
 
 interface OperatorPieChartProps {
@@ -13,123 +15,110 @@ interface OperatorPieChartProps {
   isLoading: boolean
 }
 
-/** Couleurs par opérateur pour Tremor */
-const OPERATOR_TREMOR_COLORS: Record<string, string> = {
-  AIRTEL: 'rose',
-  MOOV: 'blue',
-}
-
 export function OperatorPieChart({ data, isLoading }: OperatorPieChartProps) {
-  // Transformer les données pour Tremor
+  const totalVolume = data.reduce((sum, d) => sum + d.volume, 0)
+  
   const chartData = data.map((d) => ({
-    name: d.operator,
+    name: d.operator === 'AIRTEL' ? 'Airtel Money' : 'Moov Money',
     value: d.volume,
     count: d.count,
+    color: d.operator === 'AIRTEL' ? "#F97316" : "#3B82F6",
   }))
 
-  const totalVolume = data.reduce((sum, d) => sum + d.volume, 0)
-  const colors = data.map((d) => OPERATOR_TREMOR_COLORS[d.operator] ?? 'gray')
+  if (isLoading) {
+    return (
+      <Card className="bg-card border-border h-full">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-card-foreground">
+            Répartition par opérateur
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center gap-6 h-[240px]">
+            <Skeleton className="h-[160px] w-[160px] rounded-full" />
+            <div className="w-full space-y-3 px-4">
+               <div className="flex items-center justify-between">
+                 <Skeleton className="h-4 w-24" />
+                 <Skeleton className="h-4 w-12" />
+               </div>
+               <div className="flex items-center justify-between">
+                 <Skeleton className="h-4 w-24" />
+                 <Skeleton className="h-4 w-12" />
+               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <div className="card p-6 h-full">
-      <div className="mb-6">
-        <h2 className="text-base font-semibold text-slate-900">
-          Par opérateur
-        </h2>
-        <p className="text-sm text-slate-500">
-          Répartition du volume
-        </p>
-      </div>
-
-      {isLoading ? (
-        <PieChartSkeleton />
-      ) : chartData.length === 0 ? (
-        <div className="flex h-[200px] items-center justify-center text-sm text-slate-400">
-          Aucune donnée disponible
-        </div>
-      ) : (
-        <>
-          <DonutChart
-            className="h-[200px]"
-            data={chartData}
-            category="value"
-            index="name"
-            colors={colors}
-            valueFormatter={(value) => `${formatAmountShort(value)} XAF`}
-            showAnimation
-            showTooltip
-            variant="donut"
-          />
-
-          {/* Légende détaillée */}
-          <div className="mt-6 space-y-3">
-            {data.map((d) => {
-              const pct =
-                totalVolume > 0
-                  ? ((d.volume / totalVolume) * 100).toFixed(1)
-                  : '0'
-
-              return (
-                <div
-                  key={d.operator}
-                  className="flex items-center justify-between"
+    <Card className="bg-card border-border h-full">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold text-card-foreground">
+          Répartition par opérateur
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {chartData.length === 0 ? (
+          <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+            Aucune donnée disponible
+          </div>
+        ) : (
+          <div className="h-[240px] flex flex-col justify-between">
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                  strokeWidth={0}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`inline-block h-3 w-3 rounded-full ${
-                        d.operator === 'AIRTEL' ? 'bg-rose-500' : 'bg-blue-500'
-                      }`}
-                    />
-                    <span className="text-sm font-medium text-slate-700">
-                      {d.operator === 'AIRTEL' ? 'Airtel Money' : 'Moov Money'}
-                    </span>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value: any) => [`${formatAmountShort(Number(value))} XAF`, 'Volume']}
+                  contentStyle={{ 
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                  }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            
+            {/* Légende personnalisée pour correspondre au design v0 + extra details */}
+            <div className="mt-4 space-y-3 text-sm">
+              {chartData.map((d) => {
+                const pct = totalVolume > 0 ? ((d.value / totalVolume) * 100).toFixed(1) : '0'
+                return (
+                  <div key={d.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-3 w-3 rounded-full"
+                        style={{ backgroundColor: d.color }}
+                      />
+                      <span className="font-medium text-foreground">{d.name}</span>
+                    </div>
+                    <div className="text-right flex items-center gap-2">
+                       <span className="font-semibold text-foreground">{pct}%</span>
+                       <span className="text-muted-foreground text-xs">({d.count} tx)</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-sm font-semibold text-slate-900 font-mono tabular-nums">
-                      {pct}%
-                    </span>
-                    <span className="ml-2 text-xs text-slate-400">
-                      ({new Intl.NumberFormat('fr-FR').format(d.count)} tx)
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// =============================================================================
-// Skeleton
-// =============================================================================
-
-function PieChartSkeleton() {
-  return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Fake donut */}
-      <div className="h-[200px] w-[200px] rounded-full skeleton relative">
-        <div className="absolute inset-[40px] rounded-full bg-white" />
-      </div>
-      {/* Fake legend */}
-      <div className="w-full space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 skeleton rounded-full" />
-            <div className="h-4 w-20 skeleton rounded" />
-          </div>
-          <div className="h-4 w-12 skeleton rounded" />
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 skeleton rounded-full" />
-            <div className="h-4 w-20 skeleton rounded" />
-          </div>
-          <div className="h-4 w-12 skeleton rounded" />
-        </div>
-      </div>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -1,6 +1,34 @@
 import type { ApiError } from '@/lib/types'
 
 // =============================================================================
+// Gestion du token JWT
+// =============================================================================
+
+const TOKEN_COOKIE = 'kadryza_token'
+
+/** Lit le token depuis le cookie (compatible navigateur) */
+export function getAuthToken(): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(new RegExp(`(?:^|; )${TOKEN_COOKIE}=([^;]*)`))  
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+/** Stocke le token dans un cookie de session (expire à la fermeture du navigateur) */
+export function setAuthToken(token: string, expiresAt?: string): void {
+  if (typeof document === 'undefined') return
+  const expires = expiresAt ? `; expires=${new Date(expiresAt).toUTCString()}` : ''
+  // SameSite=Lax pour compatibilité, Secure sur HTTPS
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}${expires}; path=/${secure}; SameSite=Lax`
+}
+
+/** Supprime le cookie d'authentification */
+export function clearAuthToken(): void {
+  if (typeof document === 'undefined') return
+  document.cookie = `${TOKEN_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+}
+
+// =============================================================================
 // Configuration
 // =============================================================================
 
@@ -73,6 +101,12 @@ async function request<T>(
   const headers: Record<string, string> = {
     'Accept': 'application/json',
     ...options.headers,
+  }
+
+  // Ajouter le JWT Bearer token depuis le cookie si disponible
+  const token = getAuthToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
   }
 
   // Ajouter Content-Type uniquement si on envoie un body

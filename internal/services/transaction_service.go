@@ -94,7 +94,7 @@ func (s *TransactionService) Initiate(
 		return &models.CreateTransactionResponse{
 			ID:          existing.ID,
 			InternalRef: existing.InternalRef,
-			Status:      models.TransactionStatus(existing.Status),
+			Status:      models.TransactionStatus(fmt.Sprint(existing.Status)),
 			ExpiresAt:   existing.ExpiresAt,
 		}, nil
 	}
@@ -125,8 +125,8 @@ func (s *TransactionService) Initiate(
 		Reference:   req.Reference,
 		InternalRef: internalRef,
 		Amount:      req.Amount,
-		Currency:    db.CurrencyType(req.Currency),
-		Operator:    db.OperatorType(req.Operator),
+		Currency:    string(req.Currency),
+		Operator:    string(req.Operator),
 		PhoneNumber: req.PhoneNumber,
 		Description: description,
 	})
@@ -145,8 +145,8 @@ func (s *TransactionService) Initiate(
 		"phone_number": req.PhoneNumber,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: &txn.ID,
-		MerchantID:    &merchantID,
+		TransactionID: txn.ID,
+		MerchantID:    merchantID,
 		EventType:     models.AuditEventTransactionInitiated,
 		Payload:       auditPayload,
 	})
@@ -171,14 +171,14 @@ func (s *TransactionService) Initiate(
 	s.logger.Info("transaction initiated",
 		zap.String("transaction_id", txn.ID.String()),
 		zap.String("internal_ref", internalRef),
-		zap.String("operator", string(txn.Operator)),
+		zap.String("operator", fmt.Sprint(txn.Operator)),
 		zap.Int64("amount", txn.Amount),
 	)
 
 	return &models.CreateTransactionResponse{
 		ID:          txn.ID,
 		InternalRef: txn.InternalRef,
-		Status:      models.TransactionStatus(txn.Status),
+		Status:      models.TransactionStatus(fmt.Sprint(txn.Status)),
 		ExpiresAt:   txn.ExpiresAt,
 	}, nil
 }
@@ -269,7 +269,7 @@ func (s *TransactionService) UpdateStatus(
 		return nil, fmt.Errorf("querying transaction: %w", err)
 	}
 
-	currentStatus := models.TransactionStatus(txn.Status)
+	currentStatus := models.TransactionStatus(fmt.Sprint(txn.Status))
 
 	// Go-level validation — provides clear error messages.
 	// (The SQL WHERE clause is the actual safety net against races.)
@@ -300,7 +300,7 @@ func (s *TransactionService) UpdateStatus(
 	// this returns pgx.ErrNoRows — no data corruption possible.
 	updated, err := qtx.UpdateTransactionStatusSafe(ctx, db.UpdateTransactionStatusSafeParams{
 		ID:            txID,
-		Status:        db.TransactionStatus(newStatus),
+		Status:        string(newStatus),
 		FailureReason: failureReason,
 	})
 	if err != nil {
@@ -318,8 +318,8 @@ func (s *TransactionService) UpdateStatus(
 		"reason": derefString(failureReason),
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: &txID,
-		MerchantID:    &updated.MerchantID,
+		TransactionID: txID,
+		MerchantID:    updated.MerchantID,
 		EventType:     "STATUS_CHANGED",
 		Payload:       auditPayload,
 	})
@@ -363,7 +363,7 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 
 	txn, err := qtx.ConfirmTransaction(ctx, db.ConfirmTransactionParams{
 		ID:     txID,
-		SmsRaw: &smsRaw,
+		SmsRaw: smsRaw,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -378,8 +378,8 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 		"confirmed_at": txn.ConfirmedAt,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: &txID,
-		MerchantID:    &txn.MerchantID,
+		TransactionID: txID,
+		MerchantID:    txn.MerchantID,
 		EventType:     models.AuditEventSMSReceived,
 		Payload:       auditPayload,
 	})
@@ -424,7 +424,7 @@ func (s *TransactionService) dispatchToGateway(ctx context.Context, txn db.Trans
 	// 3. Update the transaction with the gateway_id
 	s.logger.Info("dispatching to gateway",
 		zap.String("transaction_id", txn.ID.String()),
-		zap.String("operator", string(txn.Operator)),
+		zap.String("operator", fmt.Sprint(txn.Operator)),
 	)
 }
 
@@ -480,19 +480,19 @@ func toTransactionModel(t db.Transaction) *models.Transaction {
 		Reference:       t.Reference,
 		InternalRef:     t.InternalRef,
 		Amount:          t.Amount,
-		Currency:        models.CurrencyType(t.Currency),
-		Operator:        models.OperatorType(t.Operator),
+		Currency:        models.CurrencyType(fmt.Sprint(t.Currency)),
+		Operator:        models.OperatorType(fmt.Sprint(t.Operator)),
 		PhoneNumber:     t.PhoneNumber,
 		Description:     t.Description,
-		Status:          models.TransactionStatus(t.Status),
+		Status:          models.TransactionStatus(fmt.Sprint(t.Status)),
 		GatewayID:       t.GatewayID,
 		USSDSessionID:   t.UssdSessionID,
-		SMSRaw:          t.SmsRaw,
+		SMSRaw:          &t.SmsRaw,
 		FailureReason:   t.FailureReason,
-		WebhookSent:     t.WebhookSent,
-		WebhookAttempts: t.WebhookAttempts,
+		WebhookSent:     t.WebhookSent != nil && *t.WebhookSent,
+		WebhookAttempts: int(derefInt32(t.WebhookAttempts)),
 		InitiatedAt:     t.InitiatedAt,
-		ConfirmedAt:     t.ConfirmedAt,
+		ConfirmedAt:     &t.ConfirmedAt,
 		ExpiresAt:       t.ExpiresAt,
 		CreatedAt:       t.CreatedAt,
 		UpdatedAt:       t.UpdatedAt,
@@ -505,4 +505,12 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// derefInt32 safely dereferences a *int32, returning 0 if nil.
+func derefInt32(i *int32) int32 {
+	if i == nil {
+		return 0
+	}
+	return *i
 }

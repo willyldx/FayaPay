@@ -1,40 +1,38 @@
-'use client'
+"use client"
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard,
-  ArrowLeftRight,
-  KeyRound,
-  Webhook,
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { 
+  LayoutDashboard, 
+  Receipt, 
+  Key, 
+  Webhook, 
   LogOut,
+  Zap,
+  ChevronDown,
   Loader2,
-} from 'lucide-react'
-import { useAuthStore } from '@/lib/stores/authStore'
-import type { NavItem } from '@/lib/types'
+  PanelLeftClose,
+  PanelLeftOpen
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useAuthStore } from "@/lib/stores/authStore"
+import { useUiStore } from "@/lib/stores/uiStore"
+import { toast } from "sonner"
 
-// =============================================================================
-// Navigation items
-// =============================================================================
-
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Vue d\'ensemble', href: '/',             icon: 'LayoutDashboard' },
-  { label: 'Transactions',    href: '/transactions',  icon: 'ArrowLeftRight' },
-  { label: 'Clés API',        href: '/api-keys',      icon: 'KeyRound' },
-  { label: 'Webhooks',        href: '/webhooks',      icon: 'Webhook' },
+const navigation = [
+  { name: "Vue d'ensemble", href: "/", icon: LayoutDashboard },
+  { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Clés API", href: "/api-keys", icon: Key },
+  { name: "Webhooks", href: "/webhooks", icon: Webhook },
 ]
-
-/** Map des icônes Lucide par nom */
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard,
-  ArrowLeftRight,
-  KeyRound,
-  Webhook,
-}
-
-// =============================================================================
-// Sidebar — Desktop uniquement (hidden < lg)
-// =============================================================================
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -42,62 +40,54 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.logout)
   const isLoading = useAuthStore((s) => s.isLoading)
 
+  const { isSidebarCollapsed, toggleSidebar } = useUiStore()
+
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[280px] flex-col border-r border-slate-200 bg-white lg:flex">
-      {/* --- Logo --- */}
-      <div className="flex h-16 items-center gap-2.5 px-6 border-b border-slate-100">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-kadryza-500 shadow-sm">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            className="h-5 w-5 text-white"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-        </div>
-        <span className="text-lg font-bold tracking-tight text-slate-900">
-          Kadryza
-        </span>
+    <aside className={cn("fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar transition-all duration-300", isSidebarCollapsed ? "w-[72px]" : "w-64")}>
+      {/* Header / Logo */}
+      <div className={cn("flex h-16 items-center border-b border-sidebar-border transition-all duration-300", isSidebarCollapsed ? "justify-center px-0" : "justify-between px-4")}>
+        {!isSidebarCollapsed && (
+          <Link href="/" className="flex items-center overflow-hidden">
+            <img src="/logo-full.svg" alt="Kadryza" className="h-8 w-auto" />
+          </Link>
+        )}
+        <button 
+          onClick={toggleSidebar} 
+          title={isSidebarCollapsed ? "Développer le menu" : "Réduire le menu"}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+        >
+          {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
       </div>
 
-      {/* --- Navigation --- */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = ICON_MAP[item.icon]
+          {navigation.map((item) => {
             const isActive =
               item.href === '/'
                 ? pathname === '/'
                 : pathname.startsWith(item.href)
 
             return (
-              <li key={item.href}>
+              <li key={item.name}>
                 <Link
                   href={item.href}
-                  className={`
-                    group flex items-center gap-3 rounded-lg px-3 py-2.5
-                    text-sm font-medium transition-all duration-150
-                    ${
-                      isActive
-                        ? 'bg-kadryza-50 text-kadryza-600'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }
-                  `}
-                >
-                  {Icon && (
-                    <Icon
-                      className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                        isActive
-                          ? 'text-kadryza-500'
-                          : 'text-slate-400 group-hover:text-slate-600'
-                      }`}
-                    />
+                  title={isSidebarCollapsed ? item.name : undefined}
+                  className={cn(
+                    "flex items-center rounded-lg transition-colors",
+                    isSidebarCollapsed ? "justify-center py-3" : "gap-3 px-3 py-2.5 text-sm font-medium",
+                    isActive 
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                      : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
-                  {item.label}
+                >
+                  <item.icon className={cn(
+                    "shrink-0",
+                    isSidebarCollapsed ? "h-6 w-6" : "h-5 w-5",
+                    isActive ? "text-primary" : ""
+                  )} />
+                  {!isSidebarCollapsed && <span className="truncate">{item.name}</span>}
                 </Link>
               </li>
             )
@@ -105,34 +95,55 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      {/* --- Profil merchant + Déconnexion --- */}
-      <div className="border-t border-slate-200 px-3 py-4">
+      {/* User Profile */}
+      <div className="border-t border-sidebar-border p-3">
         {merchant && (
-          <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2.5">
-            <p className="text-sm font-medium text-slate-900 truncate">
-              {merchant.name}
-            </p>
-            <p className="text-xs text-slate-500 truncate">
-              {merchant.email}
-            </p>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn("flex w-full items-center rounded-lg transition-colors hover:bg-sidebar-accent/50", isSidebarCollapsed ? "justify-center py-2" : "gap-3 px-3 py-2.5 text-sm")}>
+                <Avatar className={isSidebarCollapsed ? "h-9 w-9 shrink-0" : "h-8 w-8 shrink-0"}>
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold uppercase">
+                    {merchant.name.substring(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+                {!isSidebarCollapsed && (
+                  <>
+                    <div className="flex-1 text-left overflow-hidden">
+                      <p className="text-sm font-medium text-sidebar-foreground truncate">
+                        {merchant.name}
+                      </p>
+                      <p className="text-xs text-sidebar-muted truncate">
+                        {merchant.email}
+                      </p>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => toast.info('Paramètres du compte : Bientôt disponible')}>
+                Paramètres du compte
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toast.info('Support : Bientôt disponible')}>
+                Support
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-destructive cursor-pointer" 
+                onClick={logout}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="mr-2 h-4 w-4" />
+                )}
+                Se déconnecter
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        <button
-          onClick={logout}
-          disabled={isLoading}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5
-                     text-sm font-medium text-slate-600
-                     transition-colors duration-150
-                     hover:bg-red-50 hover:text-red-600
-                     disabled:opacity-50"
-        >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <LogOut className="h-5 w-5" />
-          )}
-          Déconnexion
-        </button>
       </div>
     </aside>
   )

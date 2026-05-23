@@ -1,20 +1,102 @@
-'use client'
+"use client"
 
 import {
-  TrendingUp,
-  ArrowLeftRight,
+  Wallet,
+  ArrowRightLeft,
   CheckCircle2,
-  CalendarClock,
-} from 'lucide-react'
-import type { DashboardStats } from '@/lib/types'
+  CalendarDays,
+  TrendingUp,
+  TrendingDown,
+  Minus
+} from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import type { DashboardStats } from "@/lib/types"
 import {
   formatAmount,
   formatAmountCompact,
   formatPercent,
-} from '@/lib/utils/format'
+} from "@/lib/utils/format"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // =============================================================================
-// StatsCards — 4 cartes métriques
+// MetricCard
+// =============================================================================
+
+interface MetricCardProps {
+  title: string
+  value: string
+  change?: {
+    value: string
+    trend: "up" | "down" | "neutral"
+  }
+  subtitle?: string
+  icon?: React.ReactNode
+  isLoading?: boolean
+}
+
+function MetricCard({ title, value, change, subtitle, icon, isLoading }: MetricCardProps) {
+  if (isLoading) {
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-5 w-5" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-8 w-32 mb-2" />
+          <Skeleton className="h-3 w-40" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {title}
+        </CardTitle>
+        {icon && (
+          <div className="text-muted-foreground">
+            {icon}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold text-card-foreground">{value}</div>
+        {change && (
+          <div className="mt-1 flex items-center gap-1 text-xs">
+            {change.trend === "up" && (
+              <TrendingUp className="h-3 w-3 text-emerald-600" />
+            )}
+            {change.trend === "down" && (
+              <TrendingDown className="h-3 w-3 text-red-500" />
+            )}
+            {change.trend === "neutral" && (
+              <Minus className="h-3 w-3 text-muted-foreground" />
+            )}
+            <span className={cn(
+              "font-medium",
+              change.trend === "up" && "text-emerald-600",
+              change.trend === "down" && "text-red-500",
+              change.trend === "neutral" && "text-muted-foreground"
+            )}>
+              {change.value}
+            </span>
+            <span className="text-muted-foreground">vs semaine dernière</span>
+          </div>
+        )}
+        {subtitle && (
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// =============================================================================
+// StatsCards
 // =============================================================================
 
 interface StatsCardsProps {
@@ -22,94 +104,49 @@ interface StatsCardsProps {
   isLoading: boolean
 }
 
-interface StatCardConfig {
-  label: string
-  getValue: (s: DashboardStats) => string
-  icon: React.ComponentType<{ className?: string }>
-  iconBg: string
-  iconColor: string
-  trend?: string
-}
-
-const CARDS: StatCardConfig[] = [
-  {
-    label: 'Volume total',
-    getValue: (s) => formatAmountCompact(s.total_volume),
-    icon: TrendingUp,
-    iconBg: 'bg-kadryza-100',
-    iconColor: 'text-kadryza-600',
-  },
-  {
-    label: 'Transactions',
-    getValue: (s) => new Intl.NumberFormat('fr-FR').format(s.total_transactions),
-    icon: ArrowLeftRight,
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
-  },
-  {
-    label: 'Taux de succès',
-    getValue: (s) => formatPercent(s.success_rate),
-    icon: CheckCircle2,
-    iconBg: 'bg-green-100',
-    iconColor: 'text-green-600',
-  },
-  {
-    label: "Aujourd'hui",
-    getValue: (s) => {
-      const today = new Date().toISOString().slice(0, 10)
-      const todayData = s.transactions_by_day.find((d) => d.date === today)
-      return todayData
-        ? new Intl.NumberFormat('fr-FR').format(todayData.count)
-        : '0'
-    },
-    icon: CalendarClock,
-    iconBg: 'bg-purple-100',
-    iconColor: 'text-purple-600',
-  },
-]
-
 export function StatsCards({ stats, isLoading }: StatsCardsProps) {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {CARDS.map((card) => (
-        <div key={card.label} className="card-hover p-5">
-          {isLoading ? (
-            <StatCardSkeleton />
-          ) : (
-            <div className="flex items-start justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-500">
-                  {card.label}
-                </p>
-                <p className="text-2xl font-semibold text-slate-900 font-mono tabular-nums">
-                  {stats ? card.getValue(stats) : '—'}
-                </p>
-              </div>
-              <div
-                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${card.iconBg}`}
-              >
-                <card.icon className={`h-5 w-5 ${card.iconColor}`} />
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
+  // Calcul pour "Aujourd'hui"
+  const getTodayData = () => {
+    if (!stats) return { value: '0 XAF', subtitle: '0 transaction' }
+    const today = new Date().toISOString().slice(0, 10)
+    const todayData = stats.transactions_by_day.find((d) => d.date === today)
+    
+    // Si on avait le volume du jour, on le formaterait. Par défaut on affiche le nb de transactions aujourd'hui pour l'instant.
+    return {
+      value: todayData ? new Intl.NumberFormat('fr-FR').format(todayData.count) : '0',
+      subtitle: "transactions aujourd'hui"
+    }
+  }
 
-// =============================================================================
-// Skeleton
-// =============================================================================
+  const todayInfo = getTodayData()
 
-function StatCardSkeleton() {
   return (
-    <div className="flex items-start justify-between">
-      <div className="space-y-3">
-        <div className="h-4 w-24 skeleton rounded" />
-        <div className="h-7 w-32 skeleton rounded" />
-      </div>
-      <div className="h-10 w-10 skeleton rounded-lg" />
+    <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <MetricCard
+        title="Volume Total"
+        value={stats ? formatAmountCompact(stats.total_volume) : '—'}
+        icon={<Wallet className="h-5 w-5" />}
+        isLoading={isLoading}
+      />
+      <MetricCard
+        title="Transactions"
+        value={stats ? new Intl.NumberFormat('fr-FR').format(stats.total_transactions) : '—'}
+        icon={<ArrowRightLeft className="h-5 w-5" />}
+        isLoading={isLoading}
+      />
+      <MetricCard
+        title="Taux de Succès"
+        value={stats ? formatPercent(stats.success_rate) : '—'}
+        icon={<CheckCircle2 className="h-5 w-5" />}
+        isLoading={isLoading}
+      />
+      <MetricCard
+        title="Aujourd'hui"
+        value={todayInfo.value}
+        subtitle={todayInfo.subtitle}
+        icon={<CalendarDays className="h-5 w-5" />}
+        isLoading={isLoading}
+      />
     </div>
   )
 }

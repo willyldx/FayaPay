@@ -13,15 +13,59 @@ sql:
         emit_interface: true
         emit_exact_table_names: false
         emit_empty_slices: true
-        emit_pointers_for_null_types: true
+        emit_pointers_for_null_types: false
         emit_enum_valid_method: true
         emit_all_enum_values: true
         overrides:
-          # Map PostgreSQL uuid → google/uuid.UUID instead of pgtype.UUID.
           - db_type: "uuid"
+            nullable: true
             go_type:
               import: "github.com/google/uuid"
               type: "UUID"
-          # Map PostgreSQL bigint → int64 (default, but explicit for clarity).
+          - db_type: "uuid"
+            nullable: false
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "boolean"
+            nullable: true
+            go_type: "bool"
+          - db_type: "boolean"
+            nullable: false
+            go_type: "bool"
+          - db_type: "bool"
+            nullable: true
+            go_type: "bool"
+          - db_type: "bool"
+            nullable: false
+            go_type: "bool"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "timestamptz"
+            nullable: false
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "text"
+            nullable: true
+            go_type: "string"
+          - db_type: "text"
+            nullable: false
+            go_type: "string"
+          - db_type: "varchar"
+            nullable: true
+            go_type: "string"
+          - db_type: "varchar"
+            nullable: false
+            go_type: "string"
+          - db_type: "transaction_status"
+            go_type: "string"
+          - db_type: "currency_type"
+            go_type: "string"
+          - db_type: "operator_type"
+            go_type: "string"
           - db_type: "bigint"
             go_type: "int64"

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Merchant } from '@/lib/types'
 import { getProfile, logout as apiLogout } from '@/lib/api/merchants'
+import { getAuthToken, clearAuthToken } from '@/lib/api/client'
 import type { QueryClient } from '@tanstack/react-query'
 
 // =============================================================================
@@ -52,6 +53,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
     } catch {
       // Même si l'appel API échoue, on nettoie le state local
     } finally {
+      clearAuthToken()  // Supprimer le cookie JWT
       set({ merchant: null, isLoading: false })
       // [H-3 FIX] Vider tout le cache de données de l'ancien merchant
       queryClientRef?.clear()
@@ -65,15 +67,21 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
     // Éviter de re-hydrater si déjà fait
     if (useAuthStore.getState().isHydrated) return
 
+    // Si pas de token en cookie, pas la peine d'appeler l'API
+    const token = getAuthToken()
+    if (!token) {
+      set({ merchant: null, isHydrated: true, isLoading: false })
+      return
+    }
+
     set({ isLoading: true })
     try {
-      // Le cookie JWT httpOnly est envoyé automatiquement par le navigateur.
-      // Si le cookie est valide, on récupère le profil merchant.
+      // Le token est envoyé en Authorization: Bearer via apiClient
       const merchant = await getProfile()
       set({ merchant, isHydrated: true, isLoading: false })
     } catch {
-      // [H-2 FIX] JWT expiré ou invalide → forcer redirect login
-      // au lieu de rester sur le dashboard avec merchant=null
+      // JWT expiré ou invalide → nettoyer le cookie corrompu
+      clearAuthToken()
       set({ merchant: null, isHydrated: true, isLoading: false })
       if (typeof window !== 'undefined') {
         window.location.href = '/login'

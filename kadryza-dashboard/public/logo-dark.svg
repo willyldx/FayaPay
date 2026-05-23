@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 100">
+  <g transform="translate(10, 10) scale(0.8)">
+    <g stroke="#148FAD" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" fill="none">
+      <path d="M20 20 h20 v20" />
+      <path d="M80 20 h-20 v20" />
+      <path d="M20 80 h20 v-20" />
+      <path d="M80 80 h-20 v-20" />
+      <path d="M50 10 v20 h20" />
+      <path d="M50 90 v-20 h-20" />
+      <path d="M10 50 h20 v-20" />
+      <path d="M90 50 h-20 v20" />
+      <rect x="46" y="46" width="8" height="8" fill="#148FAD" stroke="none" />
+    </g>
+  </g>
+  
+  <text x="110" y="72" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="60px" letter-spacing="-1px" fill="#F8FAFC">KADRYZA</text>
+  <text x="115" y="92" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="14px" letter-spacing="0.3em" fill="#94A3B8">L'API DE PAIEMENT DU TCHAD</text>
+</svg>

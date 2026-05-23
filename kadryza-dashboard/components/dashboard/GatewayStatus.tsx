@@ -1,164 +1,172 @@
-'use client'
+"use client"
 
-import { useQuery } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react'
-import { apiClient } from '@/lib/api/client'
-import type { GatewayStatus as GatewayStatusType } from '@/lib/types'
-import { formatDateRelative } from '@/lib/utils/format'
+import { useEffect, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import { apiClient } from "@/lib/api/client"
+import { Skeleton } from "@/components/ui/skeleton"
+import { AlertCircle, Smartphone } from "lucide-react"
 
 // =============================================================================
-// GatewayStatus — Statut connexion gateway en temps réel
+// API & Types
 // =============================================================================
+
+export type OperatorType = 'AIRTEL' | 'MOOV'
+
+export interface OperatorStatus {
+  operator: OperatorType
+  is_connected: boolean
+  last_check: string
+}
+
+export interface GatewayStatusType {
+  is_connected: boolean
+  operators: OperatorStatus[]
+}
 
 /**
- * Fetch le statut de la gateway.
- * GET /v1/gateway/status
+ * GET /v1/dashboard/gateway/status
  */
-function fetchGatewayStatus(): Promise<GatewayStatusType> {
-  return apiClient.get<GatewayStatusType>('/gateway/status')
+export function fetchGatewayStatus(): Promise<GatewayStatusType> {
+  return apiClient
+    .get<{
+      gateways: Array<{
+        gateway_id: string
+        operators: string[]
+        sim_status: Record<string, string>
+        connected_at: string
+        last_pong_at: string
+      }>
+      total: number
+    }>('/dashboard/gateway/status')
+    .then((res) => {
+      const is_connected = res.total > 0
+      const supportedOperators = ['AIRTEL', 'MOOV'] as const
+      const activeOperators = new Map<string, string>()
+
+      if (is_connected && res.gateways) {
+        res.gateways.forEach((gw) => {
+          if (Array.isArray(gw.operators)) {
+            gw.operators.forEach((op) => {
+              activeOperators.set(op, gw.last_pong_at)
+            })
+          }
+        })
+      }
+
+      return {
+        is_connected,
+        operators: supportedOperators.map((op) => ({
+          operator: op,
+          is_connected: activeOperators.has(op),
+          last_check: activeOperators.get(op) || new Date().toISOString(),
+        })),
+      }
+    })
 }
+
+// =============================================================================
+// Component
+// =============================================================================
 
 export function GatewayStatus() {
-  const {
-    data: status,
-    isLoading,
-    error,
-    refetch,
-    dataUpdatedAt,
-  } = useQuery({
-    queryKey: ['gateway', 'status'],
-    queryFn: fetchGatewayStatus,
-    refetchInterval: 30_000, // 30s — temps réel
-    refetchIntervalInBackground: false, // [M-3 FIX] Stop polling en onglet inactif
-    staleTime: 15_000,
-  })
+  const [status, setStatus] = useState<GatewayStatusType | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const fetchData = async () => {
+      try {
+        setError(false)
+        const data = await fetchGatewayStatus()
+        if (mounted) {
+          setStatus(data)
+          setLoading(false)
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(true)
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchData()
+    // Rafraîchissement automatique toutes les 15s
+    const interval = setInterval(fetchData, 15000)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
-    <div className="card p-6 h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            Statut Gateway
-          </h2>
-          <p className="text-sm text-slate-500">
-            Connexion en temps réel
-          </p>
-        </div>
-        <button
-          onClick={() => refetch()}
-          className="flex h-8 w-8 items-center justify-center rounded-lg
-                     text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-          aria-label="Rafraîchir le statut"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
-      </div>
-
-      {isLoading ? (
-        <GatewaySkeleton />
-      ) : error ? (
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
-          <WifiOff className="h-8 w-8 text-slate-300" />
-          <p className="text-sm text-slate-500">
-            Impossible de vérifier le statut
-          </p>
-          <button
-            onClick={() => refetch()}
-            className="text-sm font-medium text-kadryza-500 hover:text-kadryza-600 transition-colors"
-          >
-            Réessayer
-          </button>
-        </div>
-      ) : status ? (
-        <div className="space-y-4">
-          {/* Statut global */}
-          <div className="flex items-center gap-3 rounded-lg bg-slate-50 px-4 py-3">
-            {status.is_connected ? (
-              <>
-                <span className="relative flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
-                </span>
-                <span className="text-sm font-medium text-green-700">
-                  Connecté
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="inline-flex h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm font-medium text-red-700">
-                  Déconnecté
-                </span>
-              </>
-            )}
+    <Card className="bg-card border-border h-full flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base font-semibold text-card-foreground">
+          Passerelle Matérielle
+        </CardTitle>
+        <Smartphone className="h-5 w-5 text-muted-foreground" />
+      </CardHeader>
+      
+      <CardContent className="flex-1 flex flex-col justify-center">
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full rounded-lg" />
+            <Skeleton className="h-12 w-full rounded-lg" />
           </div>
-
-          {/* Statut par opérateur */}
-          <div className="space-y-2.5">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-              Opérateurs
+        ) : error ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-700 font-medium">
+              Impossible de joindre la gateway
             </p>
-            {status.operators.map((op) => (
-              <div
-                key={op.operator}
-                className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  {op.is_connected ? (
-                    <Wifi className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-red-400" />
-                  )}
-                  <div>
-                    <span className="text-sm font-medium text-slate-900">
-                      {op.operator === 'AIRTEL'
-                        ? 'Airtel Money'
-                        : 'Moov Money'}
+          </div>
+        ) : !status?.is_connected ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex flex-col items-center justify-center text-center gap-2">
+            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-red-900">Application déconnectée</p>
+              <p className="text-xs text-red-700 mt-1">
+                Veuillez démarrer l'application Android Kadryza sur votre téléphone.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {status.operators.map((op) => {
+              const opName = op.operator === 'AIRTEL' ? 'Airtel Money API' : 'Moov Money API'
+              const opStatus = op.is_connected ? 'opérationnel' : 'hors ligne'
+              
+              return (
+                <div 
+                  key={op.operator} 
+                  className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "h-2.5 w-2.5 rounded-full",
+                      op.is_connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"
+                    )} />
+                    <span className="font-medium text-foreground text-sm">{opName}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      "text-xs font-medium capitalize",
+                      op.is_connected ? "text-emerald-600" : "text-red-600"
+                    )}>
+                      {opStatus}
                     </span>
-                    <p className="text-xs text-slate-400">
-                      {formatDateRelative(op.last_check)}
-                    </p>
                   </div>
                 </div>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    op.is_connected
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}
-                >
-                  {op.is_connected ? '✓ OK' : '✗ Down'}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
-
-          {/* Dernière mise à jour */}
-          {dataUpdatedAt && (
-            <p className="text-xs text-slate-400 text-center pt-2">
-              Mis à jour {formatDateRelative(new Date(dataUpdatedAt).toISOString())}
-            </p>
-          )}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-// =============================================================================
-// Skeleton
-// =============================================================================
-
-function GatewaySkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="h-12 skeleton rounded-lg" />
-      <div className="space-y-2.5">
-        <div className="h-3 w-20 skeleton rounded" />
-        <div className="h-14 skeleton rounded-lg" />
-        <div className="h-14 skeleton rounded-lg" />
-      </div>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

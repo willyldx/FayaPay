@@ -136,6 +136,7 @@ export interface RegisterRequest {
 /** Réponse d'authentification */
 export interface AuthResponse {
   token: string
+  expires_at: string   // ISO 8601 — date d'expiration du JWT
   merchant: Merchant
 }
 

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <g stroke="#148FAD" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" fill="none">
+    <path d="M20 20 h20 v20" />
+    <path d="M80 20 h-20 v20" />
+    <path d="M20 80 h20 v-20" />
+    <path d="M80 80 h-20 v-20" />
+    <path d="M50 10 v20 h20" />
+    <path d="M50 90 v-20 h-20" />
+    <path d="M10 50 h20 v-20" />
+    <path d="M90 50 h-20 v20" />
+    <rect x="46" y="46" width="8" height="8" fill="#148FAD" stroke="none" />
+  </g>
+</svg>

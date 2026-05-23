@@ -91,7 +91,7 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		}
 		return fmt.Errorf("fetching endpoint: %w", err)
 	}
-	if !endpoint.IsActive {
+	if endpoint.IsActive != nil && !*endpoint.IsActive {
 		h.logger.Info("webhook endpoint inactive — skipping", zap.String("endpoint_id", payload.EndpointID))
 		return nil
 	}
@@ -109,11 +109,11 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 			ID:          txn.ID,
 			Reference:   txn.Reference,
 			Amount:      txn.Amount,
-			Currency:    models.CurrencyType(txn.Currency),
-			Operator:    models.OperatorType(txn.Operator),
+			Currency:    models.CurrencyType(fmt.Sprint(txn.Currency)),
+			Operator:    models.OperatorType(fmt.Sprint(txn.Operator)),
 			PhoneNumber: txn.PhoneNumber,
-			Status:      models.TransactionStatus(txn.Status),
-			ConfirmedAt: txn.ConfirmedAt,
+			Status:      models.TransactionStatus(fmt.Sprint(txn.Status)),
+			ConfirmedAt: &txn.ConfirmedAt,
 		},
 		Timestamp: time.Now().UTC(),
 	}
@@ -167,8 +167,8 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		"event_type":   payload.EventType,
 	})
 	h.queries.CreateAuditLog(ctx, db.CreateAuditLogParams{ //nolint:errcheck
-		TransactionID: &txID,
-		MerchantID:    &merchantID,
+		TransactionID: txID,
+		MerchantID:    merchantID,
 		EventType:     models.AuditEventWebhookSent,
 		Payload:       auditPayload,
 	})
@@ -188,8 +188,8 @@ func (h *WebhookHandler) logAuditWebhookFailed(ctx context.Context, txID, mercha
 		"reason": reason,
 	})
 	h.queries.CreateAuditLog(ctx, db.CreateAuditLogParams{ //nolint:errcheck
-		TransactionID: &txID,
-		MerchantID:    &merchantID,
+		TransactionID: txID,
+		MerchantID:    merchantID,
 		EventType:     models.AuditEventWebhookFailed,
 		Payload:       auditPayload,
 	})

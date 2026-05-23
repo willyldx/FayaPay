@@ -1,11 +1,20 @@
-'use client'
+"use client"
 
-import { AreaChart } from '@tremor/react'
-import type { DayMetric } from '@/lib/types'
-import { formatAmountShort } from '@/lib/utils/format'
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+import type { DayMetric } from "@/lib/types"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // =============================================================================
-// TransactionChart — Volume XAF sur 7 jours (Tremor AreaChart)
+// TransactionChart (New VolumeChart Design)
 // =============================================================================
 
 interface TransactionChartProps {
@@ -24,85 +33,104 @@ function formatChartDate(dateStr: string): string {
   })
 }
 
-export function TransactionChart({ data, isLoading }: TransactionChartProps) {
-  // Transformer les données pour Tremor
-  const chartData = data.map((d) => ({
-    date: formatChartDate(d.date),
-    'Volume (XAF)': d.volume,
-    Transactions: d.count,
-  }))
-
-  return (
-    <div className="card p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            Volume des transactions
-          </h2>
-          <p className="text-sm text-slate-500">
-            Évolution sur les 7 derniers jours
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-kadryza-500" />
-            Volume
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />
-            Nb transactions
-          </span>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <ChartSkeleton />
-      ) : chartData.length === 0 ? (
-        <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">
-          Aucune donnée disponible
-        </div>
-      ) : (
-        <AreaChart
-          className="h-[280px]"
-          data={chartData}
-          index="date"
-          categories={['Volume (XAF)', 'Transactions']}
-          colors={['orange', 'blue']}
-          valueFormatter={(value) => formatAmountShort(value)}
-          yAxisWidth={80}
-          showAnimation
-          showLegend={false}
-          showGridLines={true}
-          curveType="monotone"
-        />
-      )}
-    </div>
-  )
+function formatXAF(value: number): string {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M`
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(0)}K`
+  }
+  return value.toString()
 }
 
-// =============================================================================
-// Skeleton
-// =============================================================================
+export function TransactionChart({ data, isLoading }: TransactionChartProps) {
+  const chartData = data.map((d) => ({
+    day: formatChartDate(d.date),
+    volume: d.volume,
+    transactions: d.count,
+  }))
 
-function ChartSkeleton() {
+  if (isLoading) {
+    return (
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-card-foreground">
+            Volume des 7 derniers jours
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[240px] flex items-end gap-2 pb-4 pt-8">
+             {[65, 45, 80, 55, 90, 70, 50].map((h, i) => (
+              <Skeleton
+                key={i}
+                className="flex-1 rounded-t-sm"
+                style={{ height: `${h}%` }}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
-    <div className="h-[280px] flex flex-col justify-end gap-1 px-4">
-      {/* Fake bars to simulate chart loading */}
-      <div className="flex items-end gap-2 h-full">
-        {[65, 45, 80, 55, 90, 70, 50].map((h, i) => (
-          <div
-            key={i}
-            className="flex-1 skeleton rounded-t"
-            style={{ height: `${h}%` }}
-          />
-        ))}
-      </div>
-      {/* Fake x-axis labels */}
-      <div className="flex justify-between mt-3">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="h-3 w-10 skeleton rounded" />
-        ))}
-      </div>
-    </div>
+    <Card className="bg-card border-border">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold text-card-foreground">
+          Volume des 7 derniers jours
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {chartData.length === 0 ? (
+          <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+            Aucune donnée disponible
+          </div>
+        ) : (
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis 
+                  dataKey="day" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                />
+                <YAxis 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                  tickFormatter={formatXAF}
+                  width={50}
+                />
+                <Tooltip 
+                  formatter={(value: any) => [`${Number(value).toLocaleString('fr-FR')} XAF`, 'Volume']}
+                  labelStyle={{ color: 'var(--foreground)' }}
+                  contentStyle={{ 
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="volume"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                  fill="url(#volumeGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -104,7 +104,7 @@ func (s *WebhookService) Create(
 		ID:        endpoint.ID,
 		URL:       endpoint.Url,
 		Secret:    secret, // Shown ONCE.
-		IsActive:  endpoint.IsActive,
+		IsActive:  endpoint.IsActive != nil && *endpoint.IsActive,
 		CreatedAt: endpoint.CreatedAt,
 	}, nil
 }
@@ -121,7 +121,7 @@ func (s *WebhookService) ListByMerchant(ctx context.Context, merchantID uuid.UUI
 		result[i] = models.WebhookEndpointResponse{
 			ID:        ep.ID,
 			URL:       ep.Url,
-			IsActive:  ep.IsActive,
+			IsActive:  ep.IsActive != nil && *ep.IsActive,
 			CreatedAt: ep.CreatedAt,
 		}
 	}
@@ -243,7 +243,7 @@ func (s *WebhookService) DeliverWebhook(ctx context.Context, taskPayload Webhook
 		return fmt.Errorf("fetching endpoint: %w", err)
 	}
 
-	if !endpoint.IsActive {
+	if endpoint.IsActive != nil && !*endpoint.IsActive {
 		return nil // Deactivated — skip.
 	}
 
@@ -260,11 +260,11 @@ func (s *WebhookService) DeliverWebhook(ctx context.Context, taskPayload Webhook
 			ID:          txn.ID,
 			Reference:   txn.Reference,
 			Amount:      txn.Amount,
-			Currency:    models.CurrencyType(txn.Currency),
-			Operator:    models.OperatorType(txn.Operator),
+			Currency:    models.CurrencyType(fmt.Sprint(txn.Currency)),
+			Operator:    models.OperatorType(fmt.Sprint(txn.Operator)),
 			PhoneNumber: txn.PhoneNumber,
-			Status:      models.TransactionStatus(txn.Status),
-			ConfirmedAt: txn.ConfirmedAt,
+			Status:      models.TransactionStatus(fmt.Sprint(txn.Status)),
+			ConfirmedAt: &txn.ConfirmedAt,
 		},
 		Timestamp: time.Now().UTC(),
 	}

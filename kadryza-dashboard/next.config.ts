@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'api.kadryza.app',
       },
+      {
+        protocol: 'https',
+        hostname: 'api-kadryza.spencerai.tech',
+      },
     ],
   },
 
@@ -54,8 +58,8 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self' data:",
-              "img-src 'self' data: https://api.kadryza.app",
-              "connect-src 'self' https://api.kadryza.app",
+              "img-src 'self' data: https://api.kadryza.app https://api-kadryza.spencerai.tech",
+              "connect-src 'self' https://api.kadryza.app https://api-kadryza.spencerai.tech",
               "frame-ancestors 'none'",
             ].join('; '),
           },

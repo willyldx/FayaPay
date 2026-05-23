@@ -12,14 +12,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Palette Kadryza
+        // Palette Kadryza existante
         kadryza: {
           50: '#FFF7ED',
           100: '#FFEDD5',
           200: '#FED7AA',
           300: '#FDBA74',
           400: '#FB923C',
-          500: '#F97316', // Primaire — couleur signature Kadryza
+          500: '#F97316',
           600: '#EA580C',
           700: '#C2410C',
           800: '#9A3412',
@@ -28,18 +28,70 @@ const config: Config = {
         },
         // Statuts de transaction
         status: {
-          pending: '#F59E0B',    // Jaune
-          processing: '#3B82F6', // Bleu
-          waiting: '#8B5CF6',    // Violet
-          success: '#22C55E',    // Vert
-          failed: '#EF4444',     // Rouge
-          timeout: '#6B7280',    // Gris
-          refunded: '#F97316',   // Orange
+          pending: '#F59E0B',
+          processing: '#3B82F6',
+          waiting: '#8B5CF6',
+          success: '#22C55E',
+          failed: '#EF4444',
+          timeout: '#6B7280',
+          refunded: '#F97316',
         },
-        // Backgrounds
-        background: '#F8FAFC',
+        // Backgrounds classiques
         surface: '#FFFFFF',
         'surface-hover': '#F1F5F9',
+        
+        // --- Shadcn UI (v0) ---
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          foreground: "var(--primary-foreground)",
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
+        },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          foreground: "var(--accent-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
+        },
+        chart: {
+          1: "var(--chart-1)",
+          2: "var(--chart-2)",
+          3: "var(--chart-3)",
+          4: "var(--chart-4)",
+          5: "var(--chart-5)",
+        },
+        sidebar: {
+          DEFAULT: "var(--sidebar-background)",
+          foreground: "var(--sidebar-foreground)",
+          primary: "var(--sidebar-primary)",
+          "primary-foreground": "var(--sidebar-primary-foreground)",
+          accent: "var(--sidebar-accent)",
+          "accent-foreground": "var(--sidebar-accent-foreground)",
+          border: "var(--sidebar-border)",
+          ring: "var(--sidebar-ring)",
+          muted: "var(--sidebar-muted)",
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
@@ -49,6 +101,9 @@ const config: Config = {
         'tremor-small': '0.375rem',
         'tremor-default': '0.5rem',
         'tremor-full': '9999px',
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       fontSize: {
         'tremor-label': ['0.75rem', { lineHeight: '1rem' }],
@@ -93,6 +148,7 @@ const config: Config = {
   },
   plugins: [
     require('@tailwindcss/forms'),
+    require('tailwindcss-animate'),
   ],
 }
 

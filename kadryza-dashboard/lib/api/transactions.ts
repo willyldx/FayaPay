@@ -18,17 +18,29 @@ import type {
 export function getTransactions(
   filters: TransactionFilters = {}
 ): Promise<PaginatedResponse<Transaction>> {
-  return apiClient.get<PaginatedResponse<Transaction>>('/transactions', {
-    params: {
-      status: filters.status,
-      operator: filters.operator,
-      date_from: filters.date_from,
-      date_to: filters.date_to,
-      search: filters.search,
+  return apiClient
+    .get<{
+      transactions: Transaction[]
+      total: number
+      limit: number
+      offset: number
+    }>('/dashboard/transactions', {
+      params: {
+        status: filters.status,
+        operator: filters.operator,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        search: filters.search,
+        limit: filters.per_page ?? 20,
+        offset: ((filters.page ?? 1) - 1) * (filters.per_page ?? 20),
+      },
+    })
+    .then((res) => ({
+      data: res.transactions || [],
+      total: res.total,
       page: filters.page ?? 1,
-      per_page: filters.per_page ?? 20,
-    },
-  })
+      per_page: res.limit,
+    }))
 }
 
 /**
@@ -37,7 +49,7 @@ export function getTransactions(
  * GET /v1/transactions/:id
  */
 export function getTransaction(id: string): Promise<Transaction> {
-  return apiClient.get<Transaction>(`/transactions/${id}`)
+  return apiClient.get<Transaction>(`/dashboard/transactions/${id}`)
 }
 
 /**
@@ -46,8 +58,13 @@ export function getTransaction(id: string): Promise<Transaction> {
  * GET /v1/transactions/stats?period=7d
  */
 export function getDashboardStats(period: string = '7d'): Promise<DashboardStats> {
-  return apiClient.get<DashboardStats>('/transactions/stats', {
-    params: { period },
+  // Stats endpoint not yet available in backend — return empty stats
+  return Promise.resolve({
+    total_volume: 0,
+    total_transactions: 0,
+    success_rate: 0,
+    transactions_by_day: [],
+    by_operator: [],
   })
 }
 

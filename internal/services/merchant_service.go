@@ -95,7 +95,7 @@ func (s *MerchantService) Register(ctx context.Context, req models.CreateMerchan
 		"email": req.Email,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		MerchantID: &merchant.ID,
+		MerchantID: merchant.ID,
 		EventType:  models.AuditEventMerchantCreated,
 		Payload:    auditPayload,
 	})
@@ -132,7 +132,7 @@ func (s *MerchantService) Login(ctx context.Context, req models.LoginRequest) (*
 	}
 
 	// Check if account is active.
-	if !merchant.IsActive {
+	if merchant.IsActive != nil && !*merchant.IsActive {
 		return nil, ErrMerchantInactive
 	}
 
@@ -201,7 +201,7 @@ func (s *MerchantService) GenerateAPIKey(ctx context.Context, merchantID uuid.UU
 		"action": "API_KEY_GENERATED",
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		MerchantID: &merchantID,
+		MerchantID: merchantID,
 		EventType:  models.AuditEventAPIKeyGenerated,
 		Payload:    auditPayload,
 	})
@@ -241,7 +241,7 @@ func (s *MerchantService) RevokeAPIKey(ctx context.Context, merchantID uuid.UUID
 
 	auditPayload, _ := json.Marshal(map[string]string{"action": "API_KEY_REVOKED"})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		MerchantID: &merchantID,
+		MerchantID: merchantID,
 		EventType:  models.AuditEventAPIKeyRevoked,
 		Payload:    auditPayload,
 	})
@@ -283,7 +283,7 @@ func (s *MerchantService) AuthenticateByAPIKey(ctx context.Context, rawKey strin
 		return nil, fmt.Errorf("querying merchant by API key: %w", err)
 	}
 
-	if !merchant.IsActive {
+	if merchant.IsActive != nil && !*merchant.IsActive {
 		return nil, ErrMerchantInactive
 	}
 
@@ -328,7 +328,7 @@ func toMerchantPublic(m db.Merchant) models.MerchantPublic {
 		Name:         m.Name,
 		Email:        m.Email,
 		APIKeyPrefix: m.ApiKeyPrefix,
-		IsActive:     m.IsActive,
+		IsActive:     m.IsActive != nil && *m.IsActive,
 		CreatedAt:    m.CreatedAt,
 		UpdatedAt:    m.UpdatedAt,
 	}

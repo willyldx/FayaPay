@@ -45,7 +45,7 @@ export function logout(): Promise<void> {
  * GET /v1/merchants/me
  */
 export function getProfile(): Promise<Merchant> {
-  return apiClient.get<Merchant>('/merchants/me')
+  return apiClient.get<Merchant>('/auth/me')
 }
 
 /**
@@ -56,5 +56,5 @@ export function getProfile(): Promise<Merchant> {
 export function updateProfile(
   data: Partial<Pick<Merchant, 'name' | 'email'>>
 ): Promise<Merchant> {
-  return apiClient.patch<Merchant>('/merchants/me', data)
+  return apiClient.patch<Merchant>('/auth/me', data)
 }
