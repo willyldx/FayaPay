@@ -48,7 +48,7 @@ export function Sidebar() {
       <div className={cn("flex h-16 items-center border-b border-sidebar-border transition-all duration-300", isSidebarCollapsed ? "justify-center px-0" : "justify-between px-4")}>
         {!isSidebarCollapsed && (
           <Link href="/" className="flex items-center overflow-hidden">
-            <img src="/logo-full.svg" alt="Kadryza" className="h-8 w-auto" />
+            <img src="/logo-dark.svg" alt="Kadryza" className="h-8 w-auto" />
           </Link>
         )}
         <button 

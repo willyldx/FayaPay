@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/stores/authStore'
 import { useUiStore } from '@/lib/stores/uiStore'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // =============================================================================
@@ -30,9 +31,11 @@ export default function DashboardLayout({
   if (!isHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-kadryza-500 animate-pulse" />
-          <div className="h-2 w-24 rounded-full skeleton" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-card animate-in fade-in zoom-in duration-500">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+          <p className="text-sm font-medium text-slate-500 animate-pulse">Chargement de l'interface...</p>
         </div>
       </div>
     )
