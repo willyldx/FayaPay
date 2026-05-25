@@ -153,3 +153,35 @@ func GetMerchantID(c *fiber.Ctx) (uuid.UUID, bool) {
 	id, ok := c.Locals(LocalMerchantID).(uuid.UUID)
 	return id, ok
 }
+
+// EmailVerifiedGuard blocks access if the merchant's email is not verified.
+// Must be applied AFTER APIKeyAuth (which sets merchant_id in locals).
+// Returns 403 with code EMAIL_NOT_VERIFIED if the merchant's email is unverified.
+func EmailVerifiedGuard(merchantSvc *services.MerchantService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		merchantID, ok := GetMerchantID(c)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "authentication required",
+				"code":  "AUTH_REQUIRED",
+			})
+		}
+
+		verified, err := merchantSvc.IsEmailVerified(c.Context(), merchantID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "internal error",
+				"code":  "INTERNAL_ERROR",
+			})
+		}
+
+		if !verified {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Email non vérifié",
+				"code":  "EMAIL_NOT_VERIFIED",
+			})
+		}
+
+		return c.Next()
+	}
+}

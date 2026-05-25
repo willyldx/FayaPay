@@ -34,4 +34,7 @@ const (
 	AuditEventAPIKeyRevoked        = "API_KEY_REVOKED"
 	AuditEventGatewayConnected     = "GATEWAY_CONNECTED"
 	AuditEventGatewayDisconnected  = "GATEWAY_DISCONNECTED"
+	AuditEventEmailVerified        = "EMAIL_VERIFIED"
+	AuditEventVerificationSent     = "VERIFICATION_EMAIL_SENT"
+	AuditEventPasswordReset        = "PASSWORD_RESET"
 )

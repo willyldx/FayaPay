@@ -55,6 +55,45 @@ export const registerSchema = z
 
 export type RegisterFormData = z.infer<typeof registerSchema>
 
+/** Validation formulaire mot de passe oublié */
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'L\'email est requis')
+    .email('Adresse email invalide'),
+})
+
+export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
+
+/** Validation formulaire de réinitialisation du mot de passe */
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+      .regex(
+        /[A-Z]/,
+        'Le mot de passe doit contenir au moins une majuscule'
+      )
+      .regex(
+        /[a-z]/,
+        'Le mot de passe doit contenir au moins une minuscule'
+      )
+      .regex(
+        /[0-9]/,
+        'Le mot de passe doit contenir au moins un chiffre'
+      ),
+    password_confirmation: z
+      .string()
+      .min(1, 'La confirmation du mot de passe est requise'),
+  })
+  .refine((data) => data.password === data.password_confirmation, {
+    message: 'Les mots de passe ne correspondent pas',
+    path: ['password_confirmation'],
+  })
+
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
+
 // =============================================================================
 // Schémas Zod — Webhooks
 // =============================================================================
@@ -83,3 +122,46 @@ export const createApiKeySchema = z.object({
 })
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>
+
+// =============================================================================
+// Schémas Zod — Vérification Email & Reset Password
+// =============================================================================
+
+/** Validation formulaire mot de passe oublié */
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'L\'email est requis')
+    .email('Adresse email invalide'),
+})
+
+export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
+
+/** Validation formulaire réinitialisation mot de passe */
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+      .regex(
+        /[A-Z]/,
+        'Le mot de passe doit contenir au moins une majuscule'
+      )
+      .regex(
+        /[a-z]/,
+        'Le mot de passe doit contenir au moins une minuscule'
+      )
+      .regex(
+        /[0-9]/,
+        'Le mot de passe doit contenir au moins un chiffre'
+      ),
+    password_confirmation: z
+      .string()
+      .min(1, 'La confirmation du mot de passe est requise'),
+  })
+  .refine((data) => data.password === data.password_confirmation, {
+    message: 'Les mots de passe ne correspondent pas',
+    path: ['password_confirmation'],
+  })
+
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>

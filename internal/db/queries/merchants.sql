@@ -46,3 +46,54 @@ SET name       = COALESCE(sqlc.narg('name'), name),
     updated_at = NOW()
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- =============================================================================
+-- Email verification queries
+-- =============================================================================
+
+-- name: SetVerificationToken :exec
+UPDATE merchants
+SET verification_token            = $2,
+    verification_token_expires_at = $3,
+    updated_at                    = NOW()
+WHERE id = $1;
+
+-- name: GetMerchantByVerificationToken :one
+SELECT * FROM merchants
+WHERE verification_token = $1
+  AND verification_token_expires_at > NOW();
+
+-- name: VerifyEmail :exec
+UPDATE merchants
+SET email_verified                = true,
+    verification_token            = NULL,
+    verification_token_expires_at = NULL,
+    updated_at                    = NOW()
+WHERE id = $1;
+
+-- name: IsEmailVerified :one
+SELECT email_verified FROM merchants WHERE id = $1;
+
+-- =============================================================================
+-- Password reset queries
+-- =============================================================================
+
+-- name: SetResetPasswordToken :exec
+UPDATE merchants
+SET reset_password_token      = $2,
+    reset_password_expires_at = $3,
+    updated_at                = NOW()
+WHERE id = $1;
+
+-- name: GetMerchantByResetToken :one
+SELECT * FROM merchants
+WHERE reset_password_token = $1
+  AND reset_password_expires_at > NOW();
+
+-- name: UpdatePassword :exec
+UPDATE merchants
+SET password_hash             = $2,
+    reset_password_token      = NULL,
+    reset_password_expires_at = NULL,
+    updated_at                = NOW()
+WHERE id = $1;

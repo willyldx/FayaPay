@@ -83,7 +83,8 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	// Initialize services
 	// =========================================================================
 
-	merchantSvc := services.NewMerchantService(deps.DB, deps.Config, deps.Logger)
+	emailSvc := services.NewEmailService(deps.Config, deps.Logger)
+	merchantSvc := services.NewMerchantService(deps.DB, deps.Config, deps.Logger, emailSvc)
 	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, deps.Logger)
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
 
@@ -111,6 +112,10 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	auth := v1.Group("/auth")
 	auth.Post("/register", authLimiter, merchantHandler.Register)
 	auth.Post("/login", authLimiter, merchantHandler.Login)
+	auth.Get("/verify/:token", merchantHandler.VerifyEmail)
+	auth.Post("/resend-verification", authLimiter, merchantHandler.ResendVerification)
+	auth.Post("/forgot-password", authLimiter, merchantHandler.ForgotPassword)
+	auth.Post("/reset-password/:token", merchantHandler.ResetPassword)
 
 	// JWT-protected auth routes.
 	authProtected := auth.Group("", middleware.JWTAuth(deps.Config.JWTSecret))
@@ -119,9 +124,10 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	authProtected.Delete("/api-keys/:id", merchantHandler.RevokeAPIKey)
 	authProtected.Get("/me", merchantHandler.GetProfile)
 
-	// --- Transaction routes (API Key auth + rate limiting) ---
+	// --- Transaction routes (API Key auth + email verification + rate limiting) ---
 	transactions := v1.Group("/transactions",
 		middleware.APIKeyAuth(merchantSvc),
+		middleware.EmailVerifiedGuard(merchantSvc),
 		middleware.RateLimit(deps.Redis, middleware.DefaultRateLimitConfig()),
 	)
 	transactions.Post("/", transactionHandler.Initiate)
@@ -130,9 +136,10 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	transactions.Get("/", transactionHandler.List)
 	transactions.Get("/:id", transactionHandler.GetByID)
 
-	// --- Webhook routes (API Key auth) ---
+	// --- Webhook routes (API Key auth + email verification) ---
 	webhooks := v1.Group("/webhooks",
 		middleware.APIKeyAuth(merchantSvc),
+		middleware.EmailVerifiedGuard(merchantSvc),
 	)
 	webhooks.Post("/", webhookHandler.Create)
 	webhooks.Get("/", webhookHandler.List)

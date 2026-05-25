@@ -45,7 +45,17 @@ function LoginForm() {
       const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/'
       router.push(redirect)
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof Error && 'code' in error && (error as { code: string }).code === 'EMAIL_NOT_VERIFIED') {
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">Email non vérifié</span>
+            <a href={`/verify-email?email=${encodeURIComponent(data.email)}`} className="text-primary underline underline-offset-2 text-xs">
+              Renvoyer l'email de vérification →
+            </a>
+          </div>,
+          { duration: 8000 }
+        )
+      } else if (error instanceof Error) {
         toast.error(error.message)
       } else {
         toast.error('Identifiants invalides ou compte inactif')
@@ -81,7 +91,7 @@ function LoginForm() {
                 <label htmlFor="login-password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   Mot de passe
                 </label>
-                <Link href="#" className="ml-auto inline-block text-sm underline opacity-0 pointer-events-none">
+                <Link href="/forgot-password" className="ml-auto inline-block text-sm underline underline-offset-4 hover:text-primary">
                   Oublié?
                 </Link>
               </div>

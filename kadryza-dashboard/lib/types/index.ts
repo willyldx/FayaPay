@@ -47,6 +47,7 @@ export interface Merchant {
   id: string
   name: string
   email: string
+  email_verified: boolean
   is_active: boolean
   created_at: string
 }

@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,10 +27,13 @@ import (
 // =============================================================================
 
 var (
-	ErrMerchantNotFound  = errors.New("merchant not found")
-	ErrEmailAlreadyTaken = errors.New("email already registered")
-	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrMerchantInactive  = errors.New("merchant account is deactivated")
+	ErrMerchantNotFound    = errors.New("merchant not found")
+	ErrEmailAlreadyTaken   = errors.New("email already registered")
+	ErrInvalidCredentials  = errors.New("invalid email or password")
+	ErrMerchantInactive    = errors.New("merchant account is deactivated")
+	ErrEmailNotVerified    = errors.New("email not verified")
+	ErrInvalidToken        = errors.New("invalid or expired token")
+	ErrEmailAlreadyVerified = errors.New("email already verified")
 )
 
 // =============================================================================
@@ -37,19 +42,21 @@ var (
 
 // MerchantService handles merchant registration, authentication, and API key management.
 type MerchantService struct {
-	pool    *pgxpool.Pool
-	queries *db.Queries
-	config  *config.Config
-	logger  *zap.Logger
+	pool     *pgxpool.Pool
+	queries  *db.Queries
+	config   *config.Config
+	logger   *zap.Logger
+	emailSvc *EmailService
 }
 
 // NewMerchantService creates a new MerchantService.
-func NewMerchantService(pool *pgxpool.Pool, cfg *config.Config, logger *zap.Logger) *MerchantService {
+func NewMerchantService(pool *pgxpool.Pool, cfg *config.Config, logger *zap.Logger, emailSvc *EmailService) *MerchantService {
 	return &MerchantService{
-		pool:    pool,
-		queries: db.New(pool),
-		config:  cfg,
-		logger:  logger.Named("merchant-svc"),
+		pool:     pool,
+		queries:  db.New(pool),
+		config:   cfg,
+		logger:   logger.Named("merchant-svc"),
+		emailSvc: emailSvc,
 	}
 }
 
@@ -105,6 +112,30 @@ func (s *MerchantService) Register(ctx context.Context, req models.CreateMerchan
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	// Generate verification token and send email (outside DB tx — non-critical).
+	verificationToken, err := generateSecureToken()
+	if err != nil {
+		s.logger.Error("failed to generate verification token", zap.Error(err))
+	} else {
+		expiresAt := time.Now().Add(24 * time.Hour)
+		if err := s.queries.SetVerificationToken(ctx, db.SetVerificationTokenParams{
+			ID:                        merchant.ID,
+			VerificationToken:         &verificationToken,
+			VerificationTokenExpiresAt: &expiresAt,
+		}); err != nil {
+			s.logger.Error("failed to store verification token", zap.Error(err))
+		} else if s.emailSvc != nil {
+			go func() {
+				if err := s.emailSvc.SendVerificationEmail(req.Email, verificationToken, req.Name); err != nil {
+					s.logger.Error("failed to send verification email",
+						zap.String("email", req.Email),
+						zap.Error(err),
+					)
+				}
+			}()
+		}
 	}
 
 	s.logger.Info("merchant registered",
@@ -323,14 +354,19 @@ func (s *MerchantService) generateJWT(merchantID uuid.UUID, email string, expire
 
 // toMerchantPublic converts a sqlc-generated Merchant row to the safe public model.
 func toMerchantPublic(m db.Merchant) models.MerchantPublic {
+	emailVerified := false
+	if m.EmailVerified != nil {
+		emailVerified = *m.EmailVerified
+	}
 	return models.MerchantPublic{
-		ID:           m.ID,
-		Name:         m.Name,
-		Email:        m.Email,
-		APIKeyPrefix: m.ApiKeyPrefix,
-		IsActive:     m.IsActive != nil && *m.IsActive,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		ID:            m.ID,
+		Name:          m.Name,
+		Email:         m.Email,
+		APIKeyPrefix:  m.ApiKeyPrefix,
+		IsActive:      m.IsActive != nil && *m.IsActive,
+		EmailVerified: emailVerified,
+		CreatedAt:     m.CreatedAt,
+		UpdatedAt:     m.UpdatedAt,
 	}
 }
 
@@ -342,4 +378,174 @@ func isUniqueViolation(err error) bool {
 		return pgErr.SQLState() == "23505"
 	}
 	return false
+}
+
+// generateSecureToken creates a cryptographically random 32-byte hex token.
+func generateSecureToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := cryptorand.Read(buf); err != nil {
+		return "", fmt.Errorf("crypto/rand: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+// =============================================================================
+// Email Verification
+// =============================================================================
+
+// VerifyEmail validates a verification token and marks the merchant's email as verified.
+func (s *MerchantService) VerifyEmail(ctx context.Context, token string) error {
+	if token == "" {
+		return ErrInvalidToken
+	}
+
+	merchant, err := s.queries.GetMerchantByVerificationToken(ctx, &token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidToken
+		}
+		return fmt.Errorf("querying verification token: %w", err)
+	}
+
+	if err := s.queries.VerifyEmail(ctx, merchant.ID); err != nil {
+		return fmt.Errorf("verifying email: %w", err)
+	}
+
+	s.logger.Info("email verified",
+		zap.String("merchant_id", merchant.ID.String()),
+		zap.String("email", merchant.Email),
+	)
+
+	return nil
+}
+
+// ResendVerification generates a new verification token and sends a new email.
+func (s *MerchantService) ResendVerification(ctx context.Context, email string) error {
+	merchant, err := s.queries.GetMerchantByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Don't reveal whether the email exists.
+			return nil
+		}
+		return fmt.Errorf("querying merchant: %w", err)
+	}
+
+	// Already verified.
+	if merchant.EmailVerified != nil && *merchant.EmailVerified {
+		return ErrEmailAlreadyVerified
+	}
+
+	token, err := generateSecureToken()
+	if err != nil {
+		return fmt.Errorf("generating token: %w", err)
+	}
+
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if err := s.queries.SetVerificationToken(ctx, db.SetVerificationTokenParams{
+		ID:                        merchant.ID,
+		VerificationToken:         &token,
+		VerificationTokenExpiresAt: &expiresAt,
+	}); err != nil {
+		return fmt.Errorf("storing verification token: %w", err)
+	}
+
+	if s.emailSvc != nil {
+		if err := s.emailSvc.SendVerificationEmail(email, token, merchant.Name); err != nil {
+			s.logger.Error("failed to send verification email", zap.Error(err))
+			return fmt.Errorf("sending email: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// =============================================================================
+// Password Reset
+// =============================================================================
+
+// ForgotPassword generates a reset token and sends a password reset email.
+func (s *MerchantService) ForgotPassword(ctx context.Context, email string) error {
+	merchant, err := s.queries.GetMerchantByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Don't reveal whether the email exists.
+			return nil
+		}
+		return fmt.Errorf("querying merchant: %w", err)
+	}
+
+	token, err := generateSecureToken()
+	if err != nil {
+		return fmt.Errorf("generating token: %w", err)
+	}
+
+	expiresAt := time.Now().Add(1 * time.Hour)
+	if err := s.queries.SetResetPasswordToken(ctx, db.SetResetPasswordTokenParams{
+		ID:                    merchant.ID,
+		ResetPasswordToken:    &token,
+		ResetPasswordExpiresAt: &expiresAt,
+	}); err != nil {
+		return fmt.Errorf("storing reset token: %w", err)
+	}
+
+	if s.emailSvc != nil {
+		if err := s.emailSvc.SendPasswordResetEmail(email, token, merchant.Name); err != nil {
+			s.logger.Error("failed to send password reset email", zap.Error(err))
+			return fmt.Errorf("sending email: %w", err)
+		}
+	}
+
+	s.logger.Info("password reset email sent",
+		zap.String("merchant_id", merchant.ID.String()),
+	)
+
+	return nil
+}
+
+// ResetPassword validates a reset token and updates the merchant's password.
+func (s *MerchantService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	if token == "" {
+		return ErrInvalidToken
+	}
+
+	merchant, err := s.queries.GetMerchantByResetToken(ctx, &token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidToken
+		}
+		return fmt.Errorf("querying reset token: %w", err)
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+
+	if err := s.queries.UpdatePassword(ctx, db.UpdatePasswordParams{
+		ID:           merchant.ID,
+		PasswordHash: string(hashedPassword),
+	}); err != nil {
+		return fmt.Errorf("updating password: %w", err)
+	}
+
+	s.logger.Info("password reset successful",
+		zap.String("merchant_id", merchant.ID.String()),
+	)
+
+	return nil
+}
+
+// IsEmailVerified checks if a merchant's email is verified.
+func (s *MerchantService) IsEmailVerified(ctx context.Context, merchantID uuid.UUID) (bool, error) {
+	verified, err := s.queries.IsEmailVerified(ctx, merchantID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrMerchantNotFound
+		}
+		return false, fmt.Errorf("checking email verification: %w", err)
+	}
+	if verified == nil {
+		return false, nil
+	}
+	return *verified, nil
 }

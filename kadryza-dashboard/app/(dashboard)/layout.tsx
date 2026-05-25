@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/stores/authStore'
 import { useUiStore } from '@/lib/stores/uiStore'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
+import { EmailVerificationBanner } from '@/components/layout/EmailVerificationBanner'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -50,6 +51,9 @@ export default function DashboardLayout({
       <div className={cn("flex flex-1 flex-col transition-all duration-300", isSidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
         {/* Header — Mobile (hidden desktop) */}
         <Header />
+
+        {/* Banner vérification email */}
+        <EmailVerificationBanner />
 
         {/* Contenu de la page */}
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

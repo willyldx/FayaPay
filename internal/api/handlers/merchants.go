@@ -235,3 +235,151 @@ func parseMerchantID(c *fiber.Ctx) (uuid.UUID, error) {
 	}
 	return id, nil
 }
+
+// VerifyEmail handles GET /v1/auth/verify/:token
+func (h *MerchantHandler) VerifyEmail(c *fiber.Ctx) error {
+	token := c.Params("token")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "token is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if err := h.service.VerifyEmail(c.Context(), token); err != nil {
+		if errors.Is(err, services.ErrInvalidToken) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid or expired verification token",
+				"code":  "INVALID_TOKEN",
+			})
+		}
+		h.logger.Error("verify email failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "verification failed",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Email vérifié avec succès",
+		"code":    "EMAIL_VERIFIED",
+	})
+}
+
+// ResendVerification handles POST /v1/auth/resend-verification
+func (h *MerchantHandler) ResendVerification(c *fiber.Ctx) error {
+	var req models.ResendVerificationRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+			"code":  "INVALID_BODY",
+		})
+	}
+
+	if req.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "email is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if err := h.service.ResendVerification(c.Context(), req.Email); err != nil {
+		if errors.Is(err, services.ErrEmailAlreadyVerified) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "email is already verified",
+				"code":  "ALREADY_VERIFIED",
+			})
+		}
+		h.logger.Error("resend verification failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to resend verification",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	// Always return success to prevent email enumeration.
+	return c.JSON(fiber.Map{
+		"message": "Si cette adresse existe, un email de vérification a été envoyé",
+		"code":    "VERIFICATION_SENT",
+	})
+}
+
+// ForgotPassword handles POST /v1/auth/forgot-password
+func (h *MerchantHandler) ForgotPassword(c *fiber.Ctx) error {
+	var req models.ForgotPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+			"code":  "INVALID_BODY",
+		})
+	}
+
+	if req.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "email is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if err := h.service.ForgotPassword(c.Context(), req.Email); err != nil {
+		h.logger.Error("forgot password failed", zap.Error(err))
+		// Don't return error details — always success to prevent enumeration.
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Si cette adresse existe, un email de réinitialisation a été envoyé",
+		"code":    "RESET_EMAIL_SENT",
+	})
+}
+
+// ResetPassword handles POST /v1/auth/reset-password/:token
+func (h *MerchantHandler) ResetPassword(c *fiber.Ctx) error {
+	token := c.Params("token")
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "token is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	var req models.ResetPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+			"code":  "INVALID_BODY",
+		})
+	}
+
+	if req.Password == "" || len(req.Password) < 8 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "password must be at least 8 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if len(req.Password) > 72 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "password must not exceed 72 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if err := h.service.ResetPassword(c.Context(), token, req.Password); err != nil {
+		if errors.Is(err, services.ErrInvalidToken) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid or expired reset token",
+				"code":  "INVALID_TOKEN",
+			})
+		}
+		h.logger.Error("reset password failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "password reset failed",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Mot de passe réinitialisé avec succès",
+		"code":    "PASSWORD_RESET",
+	})
+}

@@ -58,3 +58,85 @@ export function updateProfile(
 ): Promise<Merchant> {
   return apiClient.patch<Merchant>('/auth/me', data)
 }
+
+/**
+ * Demande de réinitialisation du mot de passe.
+ * Envoie un email avec un lien de réinitialisation.
+ *
+ * POST /v1/auth/forgot-password
+ */
+export function forgotPassword(email: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>('/auth/forgot-password', { email })
+}
+
+/**
+ * Réinitialise le mot de passe avec un token.
+ *
+ * POST /v1/auth/reset-password
+ */
+export function resetPassword(token: string, password: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>('/auth/reset-password', { token, password })
+}
+
+// =============================================================================
+// Vérification Email
+// =============================================================================
+
+/**
+ * Vérifie l'email du merchant via le token reçu par mail.
+ *
+ * GET /v1/auth/verify/:token
+ */
+export function verifyEmail(token: string): Promise<{ message: string }> {
+  return apiClient.get<{ message: string }>(`/auth/verify/${token}`)
+}
+
+/**
+ * Renvoie l'email de vérification.
+ *
+ * POST /v1/auth/resend-verification
+ */
+export function resendVerification(email: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>('/auth/resend-verification', { email })
+}
+
+// =============================================================================
+// Reset Password
+// =============================================================================
+
+/**
+ * Demande un email de réinitialisation du mot de passe.
+ * Retourne toujours un succès (même si email inexistant) pour la sécurité.
+ *
+ * POST /v1/auth/forgot-password
+ */
+export function forgotPassword(email: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>('/auth/forgot-password', { email })
+}
+
+/**
+ * Réinitialise le mot de passe avec le token reçu par email.
+ *
+ * POST /v1/auth/reset-password/:token
+ */
+export function resetPassword(token: string, password: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>(`/auth/reset-password/${token}`, { password })
+}
+
+/**
+ * Renvoie l'email de vérification.
+ *
+ * POST /v1/auth/resend-verification
+ */
+export function resendVerification(email: string): Promise<{ message: string }> {
+  return apiClient.post<{ message: string }>('/auth/resend-verification', { email })
+}
+
+/**
+ * Vérifie l'email via le token reçu par mail.
+ *
+ * GET /v1/auth/verify-email/:token
+ */
+export function verifyEmail(token: string): Promise<{ message: string }> {
+  return apiClient.get<{ message: string }>(`/auth/verify-email/${token}`)
+}

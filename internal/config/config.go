@@ -36,6 +36,16 @@ type Config struct {
 
 	// CORS
 	CORSOrigins string `mapstructure:"CORS_ORIGINS"`
+
+	// SMTP — Email sending
+	SMTPHost     string `mapstructure:"SMTP_HOST"`
+	SMTPPort     int    `mapstructure:"SMTP_PORT"`
+	SMTPUser     string `mapstructure:"SMTP_USER"`
+	SMTPPassword string `mapstructure:"SMTP_PASSWORD"`
+	SMTPFrom     string `mapstructure:"SMTP_FROM"`
+
+	// App URL — used in email templates for links
+	AppURL string `mapstructure:"APP_URL"`
 }
 
 // IsProd returns true if the environment is set to production.
@@ -55,6 +65,9 @@ func Load() (*Config, error) {
 	v.SetDefault("JWT_EXPIRY", "24h")
 	v.SetDefault("WEBHOOK_TIMEOUT_SECONDS", 10)
 	v.SetDefault("TRANSACTION_TIMEOUT_MINUTES", 5)
+	v.SetDefault("SMTP_PORT", 587)
+	v.SetDefault("SMTP_FROM", "noreply@spencerai.tech")
+	v.SetDefault("APP_URL", "http://localhost:3000")
 
 	// --- .env file ---
 	v.SetConfigFile(".env")
@@ -85,6 +98,12 @@ func Load() (*Config, error) {
 	cfg.WebhookTimeoutSeconds = v.GetInt("WEBHOOK_TIMEOUT_SECONDS")
 	cfg.TransactionTimeoutMinutes = v.GetInt("TRANSACTION_TIMEOUT_MINUTES")
 	cfg.CORSOrigins = v.GetString("CORS_ORIGINS")
+	cfg.SMTPHost = v.GetString("SMTP_HOST")
+	cfg.SMTPPort = v.GetInt("SMTP_PORT")
+	cfg.SMTPUser = v.GetString("SMTP_USER")
+	cfg.SMTPPassword = v.GetString("SMTP_PASSWORD")
+	cfg.SMTPFrom = v.GetString("SMTP_FROM")
+	cfg.AppURL = v.GetString("APP_URL")
 
 	// Parse JWT expiry as a duration string (e.g. "24h", "30m").
 	expiryStr := v.GetString("JWT_EXPIRY")
