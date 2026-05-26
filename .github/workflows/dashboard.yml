@@ -5,10 +5,13 @@ on:
     branches: [main]
     paths:
       - 'kadryza-dashboard/**'
+      - '.github/workflows/dashboard.yml'
   pull_request:
     branches: [main]
     paths:
       - 'kadryza-dashboard/**'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
 
 defaults:
   run:
