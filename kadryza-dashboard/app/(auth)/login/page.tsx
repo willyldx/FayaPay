@@ -50,7 +50,7 @@ function LoginForm() {
           <div className="flex flex-col gap-1">
             <span className="font-medium">Email non vérifié</span>
             <a href={`/verify-email?email=${encodeURIComponent(data.email)}`} className="text-primary underline underline-offset-2 text-xs">
-              Renvoyer l'email de vérification →
+              Renvoyer l&apos;email de vérification →
             </a>
           </div>,
           { duration: 8000 }
@@ -142,7 +142,7 @@ function LoginForm() {
       <div className="text-center text-sm text-muted-foreground">
         Pas encore de compte ?{' '}
         <Link href="/register" className="underline underline-offset-4 hover:text-primary">
-          S'inscrire
+          S&apos;inscrire
         </Link>
       </div>
     </div>

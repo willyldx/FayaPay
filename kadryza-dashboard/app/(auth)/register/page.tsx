@@ -49,7 +49,7 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="space-y-2">
               <label htmlFor="register-name" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Nom de l'entreprise
+                Nom de l&apos;entreprise
               </label>
               <input
                 id="register-name"
@@ -137,7 +137,7 @@ export default function RegisterPage() {
                   </>
                 ) : (
                   <>
-                    S'inscrire
+                    S&apos;inscrire
                     <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                   </>
                 )}
