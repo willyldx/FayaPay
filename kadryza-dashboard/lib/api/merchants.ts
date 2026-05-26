@@ -31,7 +31,6 @@ export function register(data: RegisterRequest): Promise<{ message: string }> {
 
 /**
  * Déconnexion — invalide le JWT côté backend.
- * Le backend supprime le cookie httpOnly dans la réponse.
  *
  * POST /v1/auth/logout
  */
@@ -42,7 +41,7 @@ export function logout(): Promise<void> {
 /**
  * Récupère le profil du merchant connecté.
  *
- * GET /v1/merchants/me
+ * GET /v1/auth/me
  */
 export function getProfile(): Promise<Merchant> {
   return apiClient.get<Merchant>('/auth/me')
@@ -51,58 +50,13 @@ export function getProfile(): Promise<Merchant> {
 /**
  * Met à jour le profil du merchant.
  *
- * PATCH /v1/merchants/me
+ * PATCH /v1/auth/me
  */
 export function updateProfile(
   data: Partial<Pick<Merchant, 'name' | 'email'>>
 ): Promise<Merchant> {
   return apiClient.patch<Merchant>('/auth/me', data)
 }
-
-/**
- * Demande de réinitialisation du mot de passe.
- * Envoie un email avec un lien de réinitialisation.
- *
- * POST /v1/auth/forgot-password
- */
-export function forgotPassword(email: string): Promise<{ message: string }> {
-  return apiClient.post<{ message: string }>('/auth/forgot-password', { email })
-}
-
-/**
- * Réinitialise le mot de passe avec un token.
- *
- * POST /v1/auth/reset-password
- */
-export function resetPassword(token: string, password: string): Promise<{ message: string }> {
-  return apiClient.post<{ message: string }>('/auth/reset-password', { token, password })
-}
-
-// =============================================================================
-// Vérification Email
-// =============================================================================
-
-/**
- * Vérifie l'email du merchant via le token reçu par mail.
- *
- * GET /v1/auth/verify/:token
- */
-export function verifyEmail(token: string): Promise<{ message: string }> {
-  return apiClient.get<{ message: string }>(`/auth/verify/${token}`)
-}
-
-/**
- * Renvoie l'email de vérification.
- *
- * POST /v1/auth/resend-verification
- */
-export function resendVerification(email: string): Promise<{ message: string }> {
-  return apiClient.post<{ message: string }>('/auth/resend-verification', { email })
-}
-
-// =============================================================================
-// Reset Password
-// =============================================================================
 
 /**
  * Demande un email de réinitialisation du mot de passe.
@@ -124,19 +78,19 @@ export function resetPassword(token: string, password: string): Promise<{ messag
 }
 
 /**
+ * Vérifie l'email du merchant via le token reçu par mail.
+ *
+ * GET /v1/auth/verify-email/:token
+ */
+export function verifyEmail(token: string): Promise<{ message: string }> {
+  return apiClient.get<{ message: string }>(`/auth/verify-email/${token}`)
+}
+
+/**
  * Renvoie l'email de vérification.
  *
  * POST /v1/auth/resend-verification
  */
 export function resendVerification(email: string): Promise<{ message: string }> {
   return apiClient.post<{ message: string }>('/auth/resend-verification', { email })
-}
-
-/**
- * Vérifie l'email via le token reçu par mail.
- *
- * GET /v1/auth/verify-email/:token
- */
-export function verifyEmail(token: string): Promise<{ message: string }> {
-  return apiClient.get<{ message: string }>(`/auth/verify-email/${token}`)
 }
