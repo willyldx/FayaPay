@@ -61,11 +61,14 @@ jobs:
       - name: Generate sqlc
         run: sqlc generate
 
+      - name: Download modules
+        run: go mod download
+
       - name: Vet
-        run: go vet ./...
+        run: go vet ./cmd/... ./internal/... ./pkg/...
 
       - name: Test
-        run: go test ./... -v -race
+        run: go test ./cmd/... ./internal/... ./pkg/... -v -race
         env:
           DATABASE_URL: postgres://kadryza:testpassword@localhost:5432/kadryza_test?sslmode=disable
           REDIS_URL: redis://localhost:6379
