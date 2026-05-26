@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { 
   LayoutDashboard, 
@@ -48,7 +49,7 @@ export function Sidebar() {
       <div className={cn("flex h-16 items-center border-b border-sidebar-border transition-all duration-300", isSidebarCollapsed ? "justify-center px-0" : "justify-between px-4")}>
         {!isSidebarCollapsed && (
           <Link href="/" className="flex items-center overflow-hidden">
-            <img src="/logo-dark.svg" alt="Kadryza" className="h-8 w-auto" />
+            <Image src="/logo-dark.svg" alt="Kadryza" width={120} height={32} className="h-8 w-auto" />
           </Link>
         )}
         <button 

@@ -131,7 +131,7 @@ export function GatewayStatus() {
             <div>
               <p className="text-sm font-semibold text-red-900">Application déconnectée</p>
               <p className="text-xs text-red-700 mt-1">
-                Veuillez démarrer l'application Android Kadryza sur votre téléphone.
+                Veuillez démarrer l&apos;application Android Kadryza sur votre téléphone.
               </p>
             </div>
           </div>
