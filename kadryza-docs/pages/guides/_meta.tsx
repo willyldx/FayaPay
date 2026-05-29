@@ -1,0 +1,5 @@
+export default {
+  nextjs: 'Intégration Next.js',
+  expressjs: 'Intégration Express.js',
+  'webhook-verification': 'Vérification des webhooks'
+}
