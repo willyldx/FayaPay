@@ -1,4 +1,4 @@
-name: Dashboard CI
+name: Dashboard CI/CD
 
 on:
   push:
@@ -40,3 +40,58 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: https://api.kadryza.app
           NEXT_PUBLIC_APP_NAME: Kadryza
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "kadryza-dashboard/app/,kadryza-dashboard/components/,kadryza-dashboard/lib/,kadryza-dashboard/hooks/,kadryza-dashboard/public/,kadryza-dashboard/styles/,kadryza-dashboard/package.json,kadryza-dashboard/next.config.mjs,kadryza-dashboard/tsconfig.json,kadryza-dashboard/tailwind.config.ts,kadryza-dashboard/postcss.config.mjs,kadryza-dashboard/components.json"
+          target: "/tmp/kadryza-dash-deploy"
+          strip_components: 1
+          overwrite: true
+
+      - name: Build and restart on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            DEPLOY_DIR="/opt/kadryza/kadryza-dashboard"
+            STAGING="/tmp/kadryza-dash-deploy"
+            
+            echo "=== Syncing source files ==="
+            for dir in app components lib hooks public styles; do
+              [ -d "$STAGING/$dir" ] && cp -r "$STAGING/$dir/" "$DEPLOY_DIR/$dir/"
+            done
+            for file in package.json next.config.mjs tsconfig.json tailwind.config.ts postcss.config.mjs components.json; do
+              [ -f "$STAGING/$file" ] && cp -f "$STAGING/$file" "$DEPLOY_DIR/$file"
+            done
+            
+            echo "=== Installing dependencies ==="
+            cd "$DEPLOY_DIR"
+            npm install 2>&1 | tail -5
+            
+            echo "=== Building ==="
+            NEXT_PUBLIC_API_URL=https://api.kadryza.app \
+            NEXT_PUBLIC_APP_NAME=Kadryza \
+            npm run build 2>&1 | tail -10
+            
+            echo "=== Restarting ==="
+            pm2 restart kadryza-dashboard
+            
+            echo "=== Cleanup ==="
+            rm -rf "$STAGING"
+            
+            echo "✅ Dashboard deploy complete!"
