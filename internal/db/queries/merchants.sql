@@ -97,3 +97,10 @@ SET password_hash             = $2,
     reset_password_expires_at = NULL,
     updated_at                = NOW()
 WHERE id = $1;
+
+-- name: UpdateMerchantName :one
+UPDATE merchants
+SET name       = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

@@ -122,3 +122,43 @@ export const createApiKeySchema = z.object({
 })
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>
+
+// =============================================================================
+// Schémas Zod — Paramètres du compte
+// =============================================================================
+
+/** Validation mise à jour du profil (nom de l'entreprise) */
+export const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Le nom de l\'entreprise est requis')
+    .min(2, 'Le nom doit contenir au moins 2 caractères')
+    .max(255, 'Le nom ne peut pas dépasser 255 caractères'),
+})
+
+export type UpdateProfileFormData = z.infer<typeof updateProfileSchema>
+
+/** Validation changement de mot de passe */
+export const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, 'Le mot de passe actuel est requis'),
+    new_password: z
+      .string()
+      .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+      .regex(/[A-Z]/, 'Le mot de passe doit contenir au moins une majuscule')
+      .regex(/[a-z]/, 'Le mot de passe doit contenir au moins une minuscule')
+      .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre'),
+    new_password_confirmation: z
+      .string()
+      .min(1, 'La confirmation du mot de passe est requise'),
+  })
+  .refine((data) => data.new_password === data.new_password_confirmation, {
+    message: 'Les mots de passe ne correspondent pas',
+    path: ['new_password_confirmation'],
+  })
+  .refine((data) => data.new_password !== data.current_password, {
+    message: 'Le nouveau mot de passe doit être différent de l\'ancien',
+    path: ['new_password'],
+  })
+
+export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>

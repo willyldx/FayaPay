@@ -46,7 +46,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Gateway-Token",
-		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}))
 
@@ -123,6 +123,11 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	authProtected.Post("/api-keys", merchantHandler.GenerateAPIKey)
 	authProtected.Delete("/api-keys/:id", merchantHandler.RevokeAPIKey)
 	authProtected.Get("/me", merchantHandler.GetProfile)
+	authProtected.Patch("/change-password", merchantHandler.ChangePassword)
+
+	// --- Merchant profile routes (JWT auth) — portail merchant ---
+	merchants := v1.Group("/merchants", middleware.JWTAuth(deps.Config.JWTSecret))
+	merchants.Patch("/profile", merchantHandler.UpdateProfile)
 
 	// --- Transaction routes (API Key auth + email verification + rate limiting) ---
 	transactions := v1.Group("/transactions",

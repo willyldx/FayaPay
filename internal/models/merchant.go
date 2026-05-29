@@ -89,3 +89,15 @@ type ForgotPasswordRequest struct {
 type ResetPasswordRequest struct {
 	Password string `json:"password" validate:"required,min=8"`
 }
+
+// UpdateProfileRequest is the payload for updating a merchant's profile.
+// Only the name can be changed via this endpoint.
+type UpdateProfileRequest struct {
+	Name string `json:"name" validate:"required,max=255"`
+}
+
+// ChangePasswordRequest is the payload for changing a merchant's password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8,max=72"`
+}

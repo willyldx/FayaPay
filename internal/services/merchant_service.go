@@ -34,6 +34,7 @@ var (
 	ErrEmailNotVerified    = errors.New("email not verified")
 	ErrInvalidToken        = errors.New("invalid or expired token")
 	ErrEmailAlreadyVerified = errors.New("email already verified")
+	ErrInvalidCurrentPassword = errors.New("current password is incorrect")
 )
 
 // =============================================================================
@@ -299,6 +300,100 @@ func (s *MerchantService) GetByID(ctx context.Context, merchantID uuid.UUID) (*m
 	}
 	result := toMerchantPublic(merchant)
 	return &result, nil
+}
+
+// UpdateProfile updates the merchant's name. Email is intentionally immutable here.
+func (s *MerchantService) UpdateProfile(ctx context.Context, merchantID uuid.UUID, name string) (*models.MerchantPublic, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	qtx := s.queries.WithTx(tx)
+
+	merchant, err := qtx.UpdateMerchantName(ctx, db.UpdateMerchantNameParams{
+		ID:   merchantID,
+		Name: name,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrMerchantNotFound
+		}
+		return nil, fmt.Errorf("updating merchant name: %w", err)
+	}
+
+	auditPayload, _ := json.Marshal(map[string]string{
+		"name":   name,
+		"action": "PROFILE_UPDATED",
+	})
+	if _, err := qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		MerchantID: merchantID,
+		EventType:  models.AuditEventMerchantUpdated,
+		Payload:    auditPayload,
+	}); err != nil {
+		return nil, fmt.Errorf("creating audit log: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	s.logger.Info("merchant profile updated", zap.String("merchant_id", merchantID.String()))
+	result := toMerchantPublic(merchant)
+	return &result, nil
+}
+
+// ChangePassword verifies the current password (bcrypt) and stores a new hash.
+func (s *MerchantService) ChangePassword(ctx context.Context, merchantID uuid.UUID, currentPassword, newPassword string) error {
+	merchant, err := s.queries.GetMerchantByID(ctx, merchantID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrMerchantNotFound
+		}
+		return fmt.Errorf("querying merchant: %w", err)
+	}
+
+	// Verify the current password before allowing a change.
+	if err := bcrypt.CompareHashAndPassword([]byte(merchant.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCurrentPassword
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hashing new password: %w", err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	qtx := s.queries.WithTx(tx)
+
+	if err := qtx.UpdatePassword(ctx, db.UpdatePasswordParams{
+		ID:           merchantID,
+		PasswordHash: string(newHash),
+	}); err != nil {
+		return fmt.Errorf("updating password: %w", err)
+	}
+
+	auditPayload, _ := json.Marshal(map[string]string{"action": "PASSWORD_CHANGED"})
+	if _, err := qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		MerchantID: merchantID,
+		EventType:  models.AuditEventPasswordChanged,
+		Payload:    auditPayload,
+	}); err != nil {
+		return fmt.Errorf("creating audit log: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	s.logger.Info("merchant password changed", zap.String("merchant_id", merchantID.String()))
+	return nil
 }
 
 // AuthenticateByAPIKey validates a raw API key and returns the merchant.

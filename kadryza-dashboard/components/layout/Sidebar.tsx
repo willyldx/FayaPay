@@ -2,18 +2,19 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname } from "next/navigation"
-import { 
-  LayoutDashboard, 
-  Receipt, 
-  Key, 
-  Webhook, 
+import { usePathname, useRouter } from "next/navigation"
+import {
+  LayoutDashboard,
+  Receipt,
+  Key,
+  Webhook,
   LogOut,
   Zap,
   ChevronDown,
   Loader2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Settings
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -33,10 +34,12 @@ const navigation = [
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Clés API", href: "/api-keys", icon: Key },
   { name: "Webhooks", href: "/webhooks", icon: Webhook },
+  { name: "Paramètres", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const merchant = useAuthStore((s) => s.merchant)
   const logout = useAuthStore((s) => s.logout)
   const isLoading = useAuthStore((s) => s.isLoading)
@@ -122,7 +125,7 @@ export function Sidebar() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => toast.info('Paramètres du compte : Bientôt disponible')}>
+              <DropdownMenuItem onClick={() => router.push('/settings')}>
                 Paramètres du compte
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => toast.info('Support : Bientôt disponible')}>

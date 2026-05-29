@@ -30,6 +30,8 @@ const (
 	AuditEventWebhookSent          = "WEBHOOK_SENT"
 	AuditEventWebhookFailed        = "WEBHOOK_FAILED"
 	AuditEventMerchantCreated      = "MERCHANT_CREATED"
+	AuditEventMerchantUpdated      = "MERCHANT_UPDATED"
+	AuditEventPasswordChanged      = "PASSWORD_CHANGED"
 	AuditEventAPIKeyGenerated      = "API_KEY_GENERATED"
 	AuditEventAPIKeyRevoked        = "API_KEY_REVOKED"
 	AuditEventGatewayConnected     = "GATEWAY_CONNECTED"

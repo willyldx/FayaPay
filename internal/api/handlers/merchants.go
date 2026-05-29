@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -225,6 +226,117 @@ func (h *MerchantHandler) GetProfile(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(merchant)
+}
+
+// UpdateProfile handles PATCH /v1/merchants/profile
+func (h *MerchantHandler) UpdateProfile(c *fiber.Ctx) error {
+	merchantID, ok := middleware.GetMerchantID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "authentication required",
+			"code":  "AUTH_REQUIRED",
+		})
+	}
+
+	var req models.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+			"code":  "INVALID_BODY",
+		})
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "name is required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+	if len(req.Name) > 255 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "name must not exceed 255 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	merchant, err := h.service.UpdateProfile(c.Context(), merchantID, req.Name)
+	if err != nil {
+		if errors.Is(err, services.ErrMerchantNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "merchant not found",
+				"code":  "NOT_FOUND",
+			})
+		}
+		h.logger.Error("update profile failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update profile",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	return c.JSON(merchant)
+}
+
+// ChangePassword handles PATCH /v1/auth/change-password
+func (h *MerchantHandler) ChangePassword(c *fiber.Ctx) error {
+	merchantID, ok := middleware.GetMerchantID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "authentication required",
+			"code":  "AUTH_REQUIRED",
+		})
+	}
+
+	var req models.ChangePasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+			"code":  "INVALID_BODY",
+		})
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "current_password and new_password are required",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+	if len(req.NewPassword) < 8 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "new password must be at least 8 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+	// bcrypt silently truncates beyond 72 bytes — reject longer passwords.
+	if len(req.NewPassword) > 72 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "new password must not exceed 72 characters",
+			"code":  "VALIDATION_ERROR",
+		})
+	}
+
+	if err := h.service.ChangePassword(c.Context(), merchantID, req.CurrentPassword, req.NewPassword); err != nil {
+		if errors.Is(err, services.ErrInvalidCurrentPassword) {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "current password is incorrect",
+				"code":  "INVALID_CREDENTIALS",
+			})
+		}
+		if errors.Is(err, services.ErrMerchantNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "merchant not found",
+				"code":  "NOT_FOUND",
+			})
+		}
+		h.logger.Error("change password failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to change password",
+			"code":  "INTERNAL_ERROR",
+		})
+	}
+
+	return c.JSON(fiber.Map{"message": "password updated successfully"})
 }
 
 // parseMerchantID is a helper that parses and returns a UUID from locals.

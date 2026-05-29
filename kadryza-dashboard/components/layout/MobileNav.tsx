@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   KeyRound,
   Webhook,
+  Settings,
   LogOut,
   Loader2,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { label: 'Transactions',    href: '/transactions',  Icon: ArrowLeftRight },
   { label: 'Clés API',        href: '/api-keys',      Icon: KeyRound },
   { label: 'Webhooks',        href: '/webhooks',      Icon: Webhook },
+  { label: 'Paramètres',      href: '/settings',      Icon: Settings },
 ]
 
 // =============================================================================

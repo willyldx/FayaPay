@@ -94,3 +94,24 @@ export function verifyEmail(token: string): Promise<{ message: string }> {
 export function resendVerification(email: string): Promise<{ message: string }> {
   return apiClient.post<{ message: string }>('/auth/resend-verification', { email })
 }
+
+/**
+ * Met à jour le profil du merchant (nom de l'entreprise uniquement).
+ *
+ * PATCH /v1/merchants/profile
+ */
+export function updateMerchantProfile(data: { name: string }): Promise<Merchant> {
+  return apiClient.patch<Merchant>('/merchants/profile', data)
+}
+
+/**
+ * Change le mot de passe du merchant connecté.
+ *
+ * PATCH /v1/auth/change-password
+ */
+export function changePassword(data: {
+  current_password: string
+  new_password: string
+}): Promise<{ message: string }> {
+  return apiClient.patch<{ message: string }>('/auth/change-password', data)
+}
