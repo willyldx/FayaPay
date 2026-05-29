@@ -13,6 +13,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
+
 /* ---- Custom scrollbar (dark mode friendly) ---- */
 ::-webkit-scrollbar {
   width: 6px;
@@ -92,6 +96,7 @@ pre {
   border-radius: 9999px;
   font-size: 0.8rem;
   font-weight: 500;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   color: #F97316;
   background: rgba(249, 115, 22, 0.08);
   border: 1px solid rgba(249, 115, 22, 0.2);
@@ -106,6 +111,7 @@ pre {
 .hero-title {
   font-size: 2.8rem;
   font-weight: 800;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   letter-spacing: -0.03em;
   margin-bottom: 1rem;
 }
@@ -195,6 +201,7 @@ pre {
 .feature-card h3 {
   font-size: 1.05rem;
   font-weight: 650;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
   margin: 0.75rem 0 0.4rem;
 }
 
