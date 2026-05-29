@@ -3,7 +3,7 @@ title: Référence API
 description: API REST Kadryza — Introduction, URL de base, authentification et conventions
 ---
 
-import { Callout, Cards, Card } from 'nextra/components'
+import { Callout, Cards } from 'nextra/components'
 
 # Référence API
 
@@ -122,20 +122,20 @@ En cas de dépassement, l'API retourne `429 Too Many Requests` avec un header `R
 ## Endpoints disponibles
 
 <Cards>
-  <Card
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>💳</span>}
     title="Transactions"
     href="/api-reference/transactions"
   >
     Initier un paiement, récupérer une transaction, lister les transactions avec filtres et pagination.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
     title="Webhooks"
     href="/api-reference/webhooks"
   >
     Recevoir les notifications en temps réel, vérifier les signatures, gérer les retries.
-  </Card>
+  </Cards.Card>
 </Cards>
 
 | Méthode | Endpoint | Description |

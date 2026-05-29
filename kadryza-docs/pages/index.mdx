@@ -2,7 +2,7 @@
 title: Documentation Kadryza — API de paiement Mobile Money
 ---
 
-import { Cards, Card, Callout, Steps } from 'nextra/components'
+import { Cards, Callout, Steps } from 'nextra/components'
 
 <div className="mt-8 mb-12">
   <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
@@ -18,27 +18,27 @@ import { Cards, Card, Callout, Steps } from 'nextra/components'
 ## 🚀 Commencez ici
 
 <Cards>
-  <Card
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>⚡</span>}
     title="Démarrage rapide"
     href="/quickstart"
   >
     Intégrez Kadryza dans votre projet en 5 minutes. Installation, configuration, premier paiement.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>📡</span>}
     title="Référence API"
     href="/api-reference"
   >
     Endpoints REST complets : transactions, webhooks, authentification. Exemples curl et SDK.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>📦</span>}
     title="SDK JavaScript"
     href="/sdk"
   >
     Le SDK officiel @kadryza/sdk pour Node.js. Méthodes, types, gestion d'erreurs.
-  </Card>
+  </Cards.Card>
 </Cards>
 
 ---
@@ -98,34 +98,34 @@ console.log(transaction.internal_ref) // "KADRYZA-XXXXXXXX"
 ## Ressources utiles
 
 <Cards>
-  <Card
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>🔐</span>}
     title="Authentification"
     href="/authentication"
   >
     Comprendre les clés API, les headers HTTP, et les bonnes pratiques de sécurité.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
     title="Guide Webhooks"
     href="/guides/webhook-verification"
   >
     Recevez les notifications de paiement en temps réel. Vérification de signature incluse.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>❌</span>}
     title="Codes d'erreur"
     href="/errors"
   >
     Liste complète des erreurs API et SDK avec leurs solutions concrètes.
-  </Card>
-  <Card
+  </Cards.Card>
+  <Cards.Card
     icon={<span style={{ fontSize: '1.5em' }}>📊</span>}
     title="Dashboard"
     href="https://dashboard.kadryza.app"
   >
     Gérez vos transactions, clés API et webhooks depuis l'interface d'administration.
-  </Card>
+  </Cards.Card>
 </Cards>
 
 <Callout type="info" emoji="💡">
