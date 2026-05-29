@@ -78,16 +78,196 @@ pre {
   background-clip: text;
 }
 
-.kadryza-card {
-  @apply rounded-xl border border-gray-200 p-6 transition-all duration-200;
-  @apply hover:border-kadryza-400 hover:shadow-lg hover:shadow-kadryza-500/10;
+/* ---- Hero Section ---- */
+.hero-section {
+  padding: 3rem 0 2rem;
+  text-align: center;
 }
 
-.dark .kadryza-card {
-  @apply border-gray-700;
-  @apply hover:border-kadryza-500 hover:shadow-kadryza-500/5;
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #F97316;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  margin-bottom: 1.5rem;
 }
 
+.dark .hero-badge {
+  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(249, 115, 22, 0.25);
+}
+
+.hero-title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .hero-title {
+    font-size: 3.5rem;
+  }
+}
+
+.hero-subtitle {
+  font-size: 1.15rem;
+  color: #6b7280;
+  max-width: 600px;
+  margin: 0 auto 2rem;
+  line-height: 1.7;
+}
+
+.dark .hero-subtitle {
+  color: #9ca3af;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.dark .stat-item {
+  color: #9ca3af;
+}
+
+.stat-icon {
+  color: #F97316;
+}
+
+/* ---- Card Grid ---- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.card-grid-2 {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* ---- Feature Cards ---- */
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  text-decoration: none !important;
+  color: inherit !important;
+  transition: all 0.2s ease;
+}
+
+.feature-card:hover {
+  border-color: rgba(249, 115, 22, 0.4);
+  box-shadow: 0 8px 30px rgba(249, 115, 22, 0.08);
+  transform: translateY(-2px);
+}
+
+.dark .feature-card {
+  background: #18181b;
+  border-color: #27272a;
+}
+
+.dark .feature-card:hover {
+  border-color: rgba(249, 115, 22, 0.4);
+  box-shadow: 0 8px 30px rgba(249, 115, 22, 0.06);
+}
+
+.feature-card h3 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin: 0.75rem 0 0.4rem;
+}
+
+.feature-card p {
+  font-size: 0.88rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+}
+
+.dark .feature-card p {
+  color: #9ca3af;
+}
+
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #F97316 !important;
+  margin-top: 1rem;
+}
+
+/* ---- Card Icons ---- */
+.card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-icon-orange {
+  background: rgba(249, 115, 22, 0.1);
+  color: #F97316;
+}
+
+.card-icon-blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3B82F6;
+}
+
+.card-icon-purple {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+}
+
+.card-icon-green {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10B981;
+}
+
+.card-icon-yellow {
+  background: rgba(245, 158, 11, 0.1);
+  color: #F59E0B;
+}
+
+.card-icon-red {
+  background: rgba(239, 68, 68, 0.1);
+  color: #EF4444;
+}
+
+.dark .card-icon-orange { background: rgba(249, 115, 22, 0.15); }
+.dark .card-icon-blue { background: rgba(59, 130, 246, 0.15); }
+.dark .card-icon-purple { background: rgba(139, 92, 246, 0.15); }
+.dark .card-icon-green { background: rgba(16, 185, 129, 0.15); }
+.dark .card-icon-yellow { background: rgba(245, 158, 11, 0.15); }
+.dark .card-icon-red { background: rgba(239, 68, 68, 0.15); }
+
+/* ---- API method badges ---- */
 .kadryza-badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
 }

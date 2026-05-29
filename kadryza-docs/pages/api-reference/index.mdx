@@ -3,7 +3,8 @@ title: Référence API
 description: API REST Kadryza — Introduction, URL de base, authentification et conventions
 ---
 
-import { Callout, Cards } from 'nextra/components'
+import { Callout } from 'nextra/components'
+import { CreditCard, Bell, ArrowRight } from 'lucide-react'
 
 # Référence API
 
@@ -121,22 +122,24 @@ En cas de dépassement, l'API retourne `429 Too Many Requests` avec un header `R
 
 ## Endpoints disponibles
 
-<Cards>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>💳</span>}
-    title="Transactions"
-    href="/api-reference/transactions"
-  >
-    Initier un paiement, récupérer une transaction, lister les transactions avec filtres et pagination.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
-    title="Webhooks"
-    href="/api-reference/webhooks"
-  >
-    Recevoir les notifications en temps réel, vérifier les signatures, gérer les retries.
-  </Cards.Card>
-</Cards>
+<div className="card-grid card-grid-2">
+  <a href="/api-reference/transactions" className="feature-card">
+    <div className="card-icon card-icon-blue">
+      <CreditCard size={22} />
+    </div>
+    <h3>Transactions</h3>
+    <p>Initier un paiement, récupérer une transaction, lister les transactions avec filtres et pagination.</p>
+    <span className="card-link">Explorer <ArrowRight size={14} /></span>
+  </a>
+  <a href="/api-reference/webhooks" className="feature-card">
+    <div className="card-icon card-icon-yellow">
+      <Bell size={22} />
+    </div>
+    <h3>Webhooks</h3>
+    <p>Recevoir les notifications en temps réel, vérifier les signatures, gérer les retries.</p>
+    <span className="card-link">Configurer <ArrowRight size={14} /></span>
+  </a>
+</div>
 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|

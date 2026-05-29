@@ -2,44 +2,66 @@
 title: Documentation Kadryza — API de paiement Mobile Money
 ---
 
-import { Cards, Callout, Steps } from 'nextra/components'
+import { Callout, Steps } from 'nextra/components'
+import { Zap, Radio, Package, Lock, Bell, AlertTriangle, LayoutDashboard, ArrowRight, CheckCircle2, Shield, Clock } from 'lucide-react'
 
-<div className="mt-8 mb-12">
-  <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+<div className="hero-section">
+  <div className="hero-badge">
+    <Shield size={14} />
+    <span>API sécurisée & certifiée</span>
+  </div>
+  <h1 className="hero-title">
     <span className="kadryza-gradient-text">Documentation Kadryza</span>
   </h1>
-  <p className="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl">
+  <p className="hero-subtitle">
     L'infrastructure de paiement Mobile Money pour le Tchad et la zone CEMAC.
     <br />
     Intégrez les paiements <strong>Airtel Money</strong> et <strong>Moov Money</strong> en quelques minutes.
   </p>
+  <div className="hero-stats">
+    <div className="stat-item">
+      <Clock size={16} className="stat-icon" />
+      <span><strong>5 min</strong> d'intégration</span>
+    </div>
+    <div className="stat-item">
+      <CheckCircle2 size={16} className="stat-icon" />
+      <span><strong>99.9%</strong> uptime</span>
+    </div>
+    <div className="stat-item">
+      <Shield size={16} className="stat-icon" />
+      <span><strong>HMAC-SHA256</strong> sécurisé</span>
+    </div>
+  </div>
 </div>
 
-## 🚀 Commencez ici
+## Commencez ici
 
-<Cards>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>⚡</span>}
-    title="Démarrage rapide"
-    href="/quickstart"
-  >
-    Intégrez Kadryza dans votre projet en 5 minutes. Installation, configuration, premier paiement.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>📡</span>}
-    title="Référence API"
-    href="/api-reference"
-  >
-    Endpoints REST complets : transactions, webhooks, authentification. Exemples curl et SDK.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>📦</span>}
-    title="SDK JavaScript"
-    href="/sdk"
-  >
-    Le SDK officiel @kadryza/sdk pour Node.js. Méthodes, types, gestion d'erreurs.
-  </Cards.Card>
-</Cards>
+<div className="card-grid">
+  <a href="/quickstart" className="feature-card">
+    <div className="card-icon card-icon-orange">
+      <Zap size={22} />
+    </div>
+    <h3>Démarrage rapide</h3>
+    <p>Intégrez Kadryza dans votre projet en 5 minutes. Installation, configuration, premier paiement.</p>
+    <span className="card-link">Commencer <ArrowRight size={14} /></span>
+  </a>
+  <a href="/api-reference" className="feature-card">
+    <div className="card-icon card-icon-blue">
+      <Radio size={22} />
+    </div>
+    <h3>Référence API</h3>
+    <p>Endpoints REST complets : transactions, webhooks, authentification. Exemples curl et SDK.</p>
+    <span className="card-link">Explorer <ArrowRight size={14} /></span>
+  </a>
+  <a href="/sdk" className="feature-card">
+    <div className="card-icon card-icon-purple">
+      <Package size={22} />
+    </div>
+    <h3>SDK JavaScript</h3>
+    <p>Le SDK officiel @kadryza/sdk pour Node.js. Méthodes, types, gestion d'erreurs.</p>
+    <span className="card-link">Découvrir <ArrowRight size={14} /></span>
+  </a>
+</div>
 
 ---
 
@@ -90,45 +112,49 @@ console.log(transaction.internal_ref) // "KADRYZA-XXXXXXXX"
 
 | Opérateur | Pays | Devise | Statut |
 |-----------|------|--------|--------|
-| **Airtel Money** | Tchad 🇹🇩 | XAF (Franc CFA CEMAC) | ✅ Disponible |
-| **Moov Money** | Tchad 🇹🇩 | XAF (Franc CFA CEMAC) | ✅ Disponible |
+| **Airtel Money** | Tchad | XAF (Franc CFA CEMAC) | ✅ Disponible |
+| **Moov Money** | Tchad | XAF (Franc CFA CEMAC) | ✅ Disponible |
 
 ---
 
 ## Ressources utiles
 
-<Cards>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>🔐</span>}
-    title="Authentification"
-    href="/authentication"
-  >
-    Comprendre les clés API, les headers HTTP, et les bonnes pratiques de sécurité.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>🔔</span>}
-    title="Guide Webhooks"
-    href="/guides/webhook-verification"
-  >
-    Recevez les notifications de paiement en temps réel. Vérification de signature incluse.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>❌</span>}
-    title="Codes d'erreur"
-    href="/errors"
-  >
-    Liste complète des erreurs API et SDK avec leurs solutions concrètes.
-  </Cards.Card>
-  <Cards.Card
-    icon={<span style={{ fontSize: '1.5em' }}>📊</span>}
-    title="Dashboard"
-    href="https://dashboard.kadryza.app"
-  >
-    Gérez vos transactions, clés API et webhooks depuis l'interface d'administration.
-  </Cards.Card>
-</Cards>
+<div className="card-grid">
+  <a href="/authentication" className="feature-card">
+    <div className="card-icon card-icon-green">
+      <Lock size={22} />
+    </div>
+    <h3>Authentification</h3>
+    <p>Comprendre les clés API, les headers HTTP, et les bonnes pratiques de sécurité.</p>
+    <span className="card-link">En savoir plus <ArrowRight size={14} /></span>
+  </a>
+  <a href="/guides/webhook-verification" className="feature-card">
+    <div className="card-icon card-icon-yellow">
+      <Bell size={22} />
+    </div>
+    <h3>Guide Webhooks</h3>
+    <p>Recevez les notifications de paiement en temps réel. Vérification de signature incluse.</p>
+    <span className="card-link">Configurer <ArrowRight size={14} /></span>
+  </a>
+  <a href="/errors" className="feature-card">
+    <div className="card-icon card-icon-red">
+      <AlertTriangle size={22} />
+    </div>
+    <h3>Codes d'erreur</h3>
+    <p>Liste complète des erreurs API et SDK avec leurs solutions concrètes.</p>
+    <span className="card-link">Consulter <ArrowRight size={14} /></span>
+  </a>
+  <a href="https://dashboard.kadryza.app" className="feature-card">
+    <div className="card-icon card-icon-orange">
+      <LayoutDashboard size={22} />
+    </div>
+    <h3>Dashboard</h3>
+    <p>Gérez vos transactions, clés API et webhooks depuis l'interface d'administration.</p>
+    <span className="card-link">Ouvrir <ArrowRight size={14} /></span>
+  </a>
+</div>
 
-<Callout type="info" emoji="💡">
+<Callout type="info">
   **Besoin d'aide ?** Consultez les [guides d'intégration](/guides/nextjs) pour Next.js et Express.js,
   ou envoyez-nous un message à **support@kadryza.app**.
 </Callout>
