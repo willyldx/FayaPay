@@ -131,6 +131,7 @@ function ChartTooltipContent({
   }>
   label?: string | number
   labelFormatter?: (label: unknown, payload: unknown[]) => React.ReactNode
+  labelClassName?: string
   formatter?: (value: unknown, name: unknown, item: unknown, index: number, payload: unknown) => React.ReactNode
   color?: string
   hideLabel?: boolean
