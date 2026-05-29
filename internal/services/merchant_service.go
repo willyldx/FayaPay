@@ -124,7 +124,7 @@ func (s *MerchantService) Register(ctx context.Context, req models.CreateMerchan
 		if err := s.queries.SetVerificationToken(ctx, db.SetVerificationTokenParams{
 			ID:                        merchant.ID,
 			VerificationToken:         &verificationToken,
-			VerificationTokenExpiresAt: &expiresAt,
+			VerificationTokenExpiresAt: expiresAt,
 		}); err != nil {
 			s.logger.Error("failed to store verification token", zap.Error(err))
 		} else if s.emailSvc != nil {
@@ -539,7 +539,7 @@ func (s *MerchantService) ResendVerification(ctx context.Context, email string) 
 	if err := s.queries.SetVerificationToken(ctx, db.SetVerificationTokenParams{
 		ID:                        merchant.ID,
 		VerificationToken:         &token,
-		VerificationTokenExpiresAt: &expiresAt,
+		VerificationTokenExpiresAt: expiresAt,
 	}); err != nil {
 		return fmt.Errorf("storing verification token: %w", err)
 	}
@@ -578,7 +578,7 @@ func (s *MerchantService) ForgotPassword(ctx context.Context, email string) erro
 	if err := s.queries.SetResetPasswordToken(ctx, db.SetResetPasswordTokenParams{
 		ID:                    merchant.ID,
 		ResetPasswordToken:    &token,
-		ResetPasswordExpiresAt: &expiresAt,
+		ResetPasswordExpiresAt: expiresAt,
 	}); err != nil {
 		return fmt.Errorf("storing reset token: %w", err)
 	}
