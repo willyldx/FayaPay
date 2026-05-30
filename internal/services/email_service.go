@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"github.com/kadryza/kadryza-backend/internal/config"
 	"go.uber.org/zap"
@@ -26,55 +27,201 @@ func NewEmailService(cfg *config.Config, logger *zap.Logger) *EmailService {
 	}
 }
 
-// SendVerificationEmail sends an email with a verification link to the merchant.
+// =============================================================================
+// Content model + rendering
+// =============================================================================
+
+// emailContent is the structured content rendered into the shared base layout.
+type emailContent struct {
+	Subject  string
+	Preview  string          // preheader text (hidden, shown in inbox preview)
+	Heading  string          // escaped (plain text)
+	Body     []template.HTML // trusted HTML paragraphs (authored here)
+	CTAText  string
+	CTAURL   string
+	Footnote template.HTML // small trusted note under the CTA
+	Year     int
+}
+
+// sendContent renders the content into the base layout and sends it.
+func (s *EmailService) sendContent(to string, c emailContent) error {
+	c.Year = time.Now().Year()
+	var buf bytes.Buffer
+	if err := baseEmailTpl.Execute(&buf, c); err != nil {
+		return fmt.Errorf("rendering email template: %w", err)
+	}
+	if err := s.sendMail(to, c.Subject, buf.String()); err != nil {
+		return err
+	}
+	s.logger.Info("email sent", zap.String("to", to), zap.String("subject", c.Subject))
+	return nil
+}
+
+// para escapes a user value and wraps it as trusted body HTML.
+func para(format string, args ...string) template.HTML {
+	escaped := make([]any, len(args))
+	for i, a := range args {
+		escaped[i] = template.HTMLEscapeString(a)
+	}
+	return template.HTML(fmt.Sprintf(format, escaped...))
+}
+
+func formatXAF(amount int64) string {
+	s := fmt.Sprintf("%d", amount)
+	// Insert thin spaces as thousands separators.
+	n := len(s)
+	if n <= 3 {
+		return s + " XAF"
+	}
+	var b strings.Builder
+	pre := n % 3
+	if pre > 0 {
+		b.WriteString(s[:pre])
+		if n > pre {
+			b.WriteString(" ")
+		}
+	}
+	for i := pre; i < n; i += 3 {
+		b.WriteString(s[i : i+3])
+		if i+3 < n {
+			b.WriteString(" ")
+		}
+	}
+	return b.String() + " XAF"
+}
+
+// =============================================================================
+// Account lifecycle
+// =============================================================================
+
+// SendVerificationEmail — confirm the email address (link-based).
 func (s *EmailService) SendVerificationEmail(email, token, name string) error {
-	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", s.config.AppURL, token)
-
-	data := map[string]string{
-		"Name":      name,
-		"VerifyURL": verifyURL,
-		"Year":      fmt.Sprintf("%d", 2026), // will be replaced by time.Now().Year() at runtime
-	}
-
-	body, err := renderTemplate(verificationEmailTpl, data)
-	if err != nil {
-		return fmt.Errorf("rendering verification email template: %w", err)
-	}
-
-	if err := s.sendMail(email, "Vérifiez votre adresse email — Kadryza", body); err != nil {
-		return fmt.Errorf("sending verification email: %w", err)
-	}
-
-	s.logger.Info("verification email sent",
-		zap.String("email", email),
-	)
-	return nil
+	url := fmt.Sprintf("%s/verify-email?token=%s", s.config.AppURL, token)
+	return s.sendContent(email, emailContent{
+		Subject: "Vérifiez votre adresse email — Kadryza",
+		Preview: "Confirmez votre adresse pour activer votre compte Kadryza.",
+		Heading: fmt.Sprintf("Bienvenue, %s 👋", name),
+		Body: []template.HTML{
+			"Merci de vous être inscrit sur <strong>Kadryza</strong>. Pour activer votre compte et commencer à encaisser, veuillez confirmer votre adresse email.",
+		},
+		CTAText:  "Vérifier mon email",
+		CTAURL:   url,
+		Footnote: "Ce lien expire dans 24 heures. Si vous n'avez pas créé de compte, ignorez simplement cet email.",
+	})
 }
 
-// SendPasswordResetEmail sends an email with a password reset link.
+// SendWelcomeEmail — onboarding instructions, sent after the email is verified.
+func (s *EmailService) SendWelcomeEmail(email, name string) error {
+	dashboard := strings.TrimRight(s.config.AppURL, "/")
+	return s.sendContent(email, emailContent{
+		Subject: "Votre compte Kadryza est prêt 🚀",
+		Preview: "Voici comment démarrer avec Kadryza en 3 étapes.",
+		Heading: fmt.Sprintf("Bienvenue à bord, %s !", name),
+		Body: []template.HTML{
+			"Votre adresse email est vérifiée et votre compte <strong>Kadryza</strong> est actif. Voici comment commencer :",
+			"<strong>1.</strong> Créez une <strong>clé API</strong> depuis l'onglet « Clés API ».<br>" +
+				"<strong>2.</strong> Configurez un <strong>webhook</strong> pour recevoir les notifications de paiement.<br>" +
+				"<strong>3.</strong> Ou créez un <strong>lien de paiement</strong> pour encaisser sans code.",
+			"Notre documentation vous guide pour intégrer Airtel Money et Moov Money en quelques minutes.",
+		},
+		CTAText:  "Accéder à mon dashboard",
+		CTAURL:   dashboard,
+		Footnote: "Besoin d'aide ? Répondez à cet email ou contactez support@kadryza.app.",
+	})
+}
+
+// SendPasswordResetEmail — reset link.
 func (s *EmailService) SendPasswordResetEmail(email, token, name string) error {
-	resetURL := fmt.Sprintf("%s/reset-password?token=%s", s.config.AppURL, token)
-
-	data := map[string]string{
-		"Name":     name,
-		"ResetURL": resetURL,
-		"Year":     fmt.Sprintf("%d", 2026),
-	}
-
-	body, err := renderTemplate(passwordResetEmailTpl, data)
-	if err != nil {
-		return fmt.Errorf("rendering password reset email template: %w", err)
-	}
-
-	if err := s.sendMail(email, "Réinitialisation de votre mot de passe — Kadryza", body); err != nil {
-		return fmt.Errorf("sending password reset email: %w", err)
-	}
-
-	s.logger.Info("password reset email sent",
-		zap.String("email", email),
-	)
-	return nil
+	url := fmt.Sprintf("%s/reset-password?token=%s", s.config.AppURL, token)
+	return s.sendContent(email, emailContent{
+		Subject: "Réinitialisation de votre mot de passe — Kadryza",
+		Preview: "Définissez un nouveau mot de passe pour votre compte Kadryza.",
+		Heading: "Réinitialisation du mot de passe",
+		Body: []template.HTML{
+			para("Bonjour <strong>%s</strong>,", name),
+			"Nous avons reçu une demande de réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour en définir un nouveau.",
+		},
+		CTAText:  "Réinitialiser mon mot de passe",
+		CTAURL:   url,
+		Footnote: "Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email — votre mot de passe ne sera pas modifié.",
+	})
 }
+
+// =============================================================================
+// Security alerts
+// =============================================================================
+
+// SendPasswordChangedEmail — security alert after a password change.
+func (s *EmailService) SendPasswordChangedEmail(email, name string) error {
+	when := time.Now().UTC().Format("02/01/2006 15:04 UTC")
+	return s.sendContent(email, emailContent{
+		Subject: "Votre mot de passe a été modifié — Kadryza",
+		Preview: "Confirmation de sécurité : votre mot de passe a changé.",
+		Heading: "Mot de passe modifié",
+		Body: []template.HTML{
+			para("Bonjour <strong>%s</strong>,", name),
+			para("Le mot de passe de votre compte Kadryza a été modifié le <strong>%s</strong>.", when),
+			"Si vous êtes à l'origine de ce changement, aucune action n'est nécessaire.",
+		},
+		Footnote: "Si vous n'avez pas effectué ce changement, contactez immédiatement support@kadryza.app pour sécuriser votre compte.",
+	})
+}
+
+// SendAPIKeyCreatedEmail — security alert when a new API key is generated.
+func (s *EmailService) SendAPIKeyCreatedEmail(email, name, prefix string) error {
+	when := time.Now().UTC().Format("02/01/2006 15:04 UTC")
+	return s.sendContent(email, emailContent{
+		Subject: "Nouvelle clé API créée — Kadryza",
+		Preview: "Une nouvelle clé API a été générée sur votre compte.",
+		Heading: "Nouvelle clé API créée",
+		Body: []template.HTML{
+			para("Bonjour <strong>%s</strong>,", name),
+			para("Une nouvelle clé API (préfixe <strong>%s…</strong>) a été générée sur votre compte le <strong>%s</strong>.", prefix, when),
+			"Conservez cette clé en lieu sûr — elle donne un accès complet à votre compte via l'API.",
+		},
+		Footnote: "Si vous n'êtes pas à l'origine de cette action, révoquez la clé depuis votre dashboard et contactez support@kadryza.app.",
+	})
+}
+
+// SendAPIKeyRevokedEmail — security alert when an API key is revoked.
+func (s *EmailService) SendAPIKeyRevokedEmail(email, name string) error {
+	when := time.Now().UTC().Format("02/01/2006 15:04 UTC")
+	return s.sendContent(email, emailContent{
+		Subject: "Clé API révoquée — Kadryza",
+		Preview: "Une clé API de votre compte a été révoquée.",
+		Heading: "Clé API révoquée",
+		Body: []template.HTML{
+			para("Bonjour <strong>%s</strong>,", name),
+			para("Une clé API de votre compte a été révoquée le <strong>%s</strong>. Toute requête utilisant cette clé sera désormais rejetée.", when),
+		},
+		Footnote: "Si vous n'êtes pas à l'origine de cette action, contactez immédiatement support@kadryza.app.",
+	})
+}
+
+// =============================================================================
+// Business
+// =============================================================================
+
+// SendPaymentReceivedEmail — notify the merchant of a successful payment.
+func (s *EmailService) SendPaymentReceivedEmail(email, name, reference, phone string, amount int64) error {
+	return s.sendContent(email, emailContent{
+		Subject: fmt.Sprintf("Paiement reçu : %s — Kadryza", formatXAF(amount)),
+		Preview: fmt.Sprintf("Vous avez reçu %s.", formatXAF(amount)),
+		Heading: fmt.Sprintf("Paiement reçu : %s", formatXAF(amount)),
+		Body: []template.HTML{
+			para("Bonjour <strong>%s</strong>,", name),
+			para("Un paiement de <strong>%s</strong> a été confirmé avec succès.", formatXAF(amount)),
+			para("Référence : <strong>%s</strong><br>Payeur : <strong>%s</strong>", reference, phone),
+		},
+		CTAText:  "Voir la transaction",
+		CTAURL:   strings.TrimRight(s.config.AppURL, "/") + "/transactions",
+		Footnote: "Ceci est une notification automatique. Retrouvez le détail dans votre dashboard.",
+	})
+}
+
+// =============================================================================
+// SMTP transport
+// =============================================================================
 
 // sendMail sends an HTML email via SMTP.
 //   - Port 465  → implicit TLS (SMTPS).
@@ -159,28 +306,16 @@ func (s *EmailService) sendMailImplicitTLS(addr, host string, auth smtp.Auth, fr
 	return c.Quit()
 }
 
-// renderTemplate renders an HTML template with the given data.
-func renderTemplate(tplStr string, data map[string]string) (string, error) {
-	tpl, err := template.New("email").Parse(tplStr)
-	if err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
-}
-
 // =============================================================================
-// Email Templates — HTML inline avec branding Kadryza (#F97316 orange)
+// Shared base layout — branded Kadryza shell (#F97316)
 // =============================================================================
 
-var verificationEmailTpl = strings.TrimSpace(`
+var baseEmailTpl = template.Must(template.New("email").Parse(strings.TrimSpace(`
 <!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <span style="display:none;max-height:0;overflow:hidden;opacity:0;">{{.Preview}}</span>
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
     <tr>
       <td style="background-color:#F97316;padding:32px 40px;text-align:center;">
@@ -189,72 +324,21 @@ var verificationEmailTpl = strings.TrimSpace(`
     </tr>
     <tr>
       <td style="padding:40px;">
-        <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">Bienvenue, {{.Name}} 👋</h2>
-        <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 24px;">
-          Merci de vous être inscrit sur <strong>Kadryza</strong>. Pour activer votre compte et commencer à intégrer nos services de paiement, veuillez vérifier votre adresse email.
-        </p>
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td align="center">
-              <a href="{{.VerifyURL}}" style="display:inline-block;background-color:#F97316;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;letter-spacing:0.3px;">
-                Vérifier mon email
-              </a>
-            </td>
-          </tr>
+        <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">{{.Heading}}</h2>
+        {{range .Body}}<p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 16px;">{{.}}</p>{{end}}
+        {{if .CTAURL}}
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 8px;">
+          <tr><td align="center">
+            <a href="{{.CTAURL}}" style="display:inline-block;background-color:#F97316;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;letter-spacing:0.3px;">{{.CTAText}}</a>
+          </td></tr>
         </table>
-        <p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:24px 0 0;">
-          Ce lien expire dans <strong>24 heures</strong>. Si vous n'avez pas créé de compte, ignorez simplement cet email.
-        </p>
+        {{end}}
+        {{if .Footnote}}<p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:24px 0 0;">{{.Footnote}}</p>{{end}}
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 16px;">
-        <p style="color:#cbd5e1;font-size:12px;text-align:center;margin:0;">
-          © {{.Year}} Kadryza — Infrastructure de paiement CEMAC
-        </p>
+        <p style="color:#cbd5e1;font-size:12px;text-align:center;margin:0;">© {{.Year}} Kadryza — Infrastructure de paiement CEMAC</p>
       </td>
     </tr>
   </table>
 </body>
 </html>
-`)
-
-var passwordResetEmailTpl = strings.TrimSpace(`
-<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-    <tr>
-      <td style="background-color:#F97316;padding:32px 40px;text-align:center;">
-        <h1 style="color:#ffffff;font-size:28px;margin:0;font-weight:700;letter-spacing:-0.5px;">⚡ Kadryza</h1>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:40px;">
-        <h2 style="color:#1e293b;font-size:22px;margin:0 0 16px;">Réinitialisation du mot de passe</h2>
-        <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 8px;">
-          Bonjour <strong>{{.Name}}</strong>,
-        </p>
-        <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 24px;">
-          Nous avons reçu une demande de réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour en définir un nouveau.
-        </p>
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td align="center">
-              <a href="{{.ResetURL}}" style="display:inline-block;background-color:#F97316;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;letter-spacing:0.3px;">
-                Réinitialiser mon mot de passe
-              </a>
-            </td>
-          </tr>
-        </table>
-        <p style="color:#94a3b8;font-size:14px;line-height:1.5;margin:24px 0 0;">
-          Ce lien expire dans <strong>1 heure</strong>. Si vous n'avez pas fait cette demande, ignorez simplement cet email — votre mot de passe ne sera pas modifié.
-        </p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0 16px;">
-        <p style="color:#cbd5e1;font-size:12px;text-align:center;margin:0;">
-          © {{.Year}} Kadryza — Infrastructure de paiement CEMAC
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-`)
+`)))

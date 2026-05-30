@@ -43,6 +43,7 @@ type TransactionService struct {
 	queries     *db.Queries
 	hub         *gateway.Hub
 	asynqClient *asynq.Client
+	emailSvc    *EmailService
 	logger      *zap.Logger
 }
 
@@ -51,6 +52,7 @@ func NewTransactionService(
 	pool *pgxpool.Pool,
 	hub *gateway.Hub,
 	asynqClient *asynq.Client,
+	emailSvc *EmailService,
 	logger *zap.Logger,
 ) *TransactionService {
 	return &TransactionService{
@@ -58,8 +60,29 @@ func NewTransactionService(
 		queries:     db.New(pool),
 		hub:         hub,
 		asynqClient: asynqClient,
+		emailSvc:    emailSvc,
 		logger:      logger.Named("transaction-svc"),
 	}
+}
+
+// notifyPaymentReceived emails the merchant when a payment succeeds (best-effort).
+func (s *TransactionService) notifyPaymentReceived(txID uuid.UUID) {
+	if s.emailSvc == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		txn, err := s.queries.GetTransactionByID(ctx, txID)
+		if err != nil {
+			return
+		}
+		merchant, err := s.queries.GetMerchantByID(ctx, txn.MerchantID)
+		if err != nil {
+			return
+		}
+		_ = s.emailSvc.SendPaymentReceivedEmail(merchant.Email, merchant.Name, txn.Reference, txn.PhoneNumber, txn.Amount)
+	}()
 }
 
 // =============================================================================
@@ -336,6 +359,9 @@ func (s *TransactionService) UpdateStatus(
 	if newStatus.IsFinal() {
 		s.enqueueWebhook(txID, updated.MerchantID, newStatus)
 	}
+	if newStatus == models.StatusSuccess {
+		s.notifyPaymentReceived(txID)
+	}
 
 	s.logger.Info("transaction status updated",
 		zap.String("transaction_id", txID.String()),
@@ -394,6 +420,7 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 
 	// Enqueue webhook dispatch for SUCCESS.
 	s.enqueueWebhook(txID, txn.MerchantID, models.StatusSuccess)
+	s.notifyPaymentReceived(txID)
 
 	s.logger.Info("transaction confirmed via SMS",
 		zap.String("transaction_id", txID.String()),

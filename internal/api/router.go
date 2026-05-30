@@ -85,7 +85,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 
 	emailSvc := services.NewEmailService(deps.Config, deps.Logger)
 	merchantSvc := services.NewMerchantService(deps.DB, deps.Config, deps.Logger, emailSvc)
-	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, deps.Logger)
+	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, emailSvc, deps.Logger)
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
 	paymentLinkSvc := services.NewPaymentLinkService(deps.DB, deps.Config, deps.Logger)
 

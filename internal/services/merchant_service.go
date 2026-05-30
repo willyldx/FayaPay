@@ -250,6 +250,14 @@ func (s *MerchantService) GenerateAPIKey(ctx context.Context, merchantID uuid.UU
 		zap.String("prefix", prefix),
 	)
 
+	// Security alert email (best-effort, async).
+	if s.emailSvc != nil {
+		if m, merr := s.queries.GetMerchantByID(ctx, merchantID); merr == nil {
+			email, name := m.Email, m.Name
+			go func() { _ = s.emailSvc.SendAPIKeyCreatedEmail(email, name, prefix) }()
+		}
+	}
+
 	return &models.APIKeyResponse{
 		APIKey:    rawKey, // Shown ONCE — never again.
 		Prefix:    prefix,
@@ -286,6 +294,15 @@ func (s *MerchantService) RevokeAPIKey(ctx context.Context, merchantID uuid.UUID
 	}
 
 	s.logger.Info("API key revoked", zap.String("merchant_id", merchantID.String()))
+
+	// Security alert email (best-effort, async).
+	if s.emailSvc != nil {
+		if m, merr := s.queries.GetMerchantByID(ctx, merchantID); merr == nil {
+			email, name := m.Email, m.Name
+			go func() { _ = s.emailSvc.SendAPIKeyRevokedEmail(email, name) }()
+		}
+	}
+
 	return nil
 }
 
@@ -393,6 +410,13 @@ func (s *MerchantService) ChangePassword(ctx context.Context, merchantID uuid.UU
 	}
 
 	s.logger.Info("merchant password changed", zap.String("merchant_id", merchantID.String()))
+
+	// Security alert email (best-effort, async).
+	if s.emailSvc != nil {
+		email, name := merchant.Email, merchant.Name
+		go func() { _ = s.emailSvc.SendPasswordChangedEmail(email, name) }()
+	}
+
 	return nil
 }
 
@@ -510,6 +534,12 @@ func (s *MerchantService) VerifyEmail(ctx context.Context, token string) error {
 		zap.String("merchant_id", merchant.ID.String()),
 		zap.String("email", merchant.Email),
 	)
+
+	// Welcome / onboarding email (best-effort, async).
+	if s.emailSvc != nil {
+		email, name := merchant.Email, merchant.Name
+		go func() { _ = s.emailSvc.SendWelcomeEmail(email, name) }()
+	}
 
 	return nil
 }
