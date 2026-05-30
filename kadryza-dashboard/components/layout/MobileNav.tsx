@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   KeyRound,
   Webhook,
+  Link2,
   Settings,
   HelpCircle,
   LogOut,
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { label: 'Transactions',    href: '/transactions',  Icon: ArrowLeftRight },
   { label: 'Clés API',        href: '/api-keys',      Icon: KeyRound },
   { label: 'Webhooks',        href: '/webhooks',      Icon: Webhook },
+  { label: 'Liens de paiement', href: '/payment-links', Icon: Link2 },
   { label: 'Paramètres',      href: '/settings',      Icon: Settings },
   { label: 'Support',         href: '/support',       Icon: HelpCircle },
 ]

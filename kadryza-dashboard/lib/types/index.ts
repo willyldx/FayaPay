@@ -71,6 +71,65 @@ export interface WebhookEndpoint {
   secret?: string
 }
 
+/** Lien de paiement (hosted checkout) */
+export interface PaymentLink {
+  id: string
+  slug: string
+  amount: number              // En entiers XAF
+  currency: string
+  description?: string
+  is_active: boolean
+  is_reusable: boolean
+  success_url?: string
+  paid_count: number
+  expires_at?: string         // ISO 8601
+  url: string                 // URL publique de checkout
+  created_at: string
+}
+
+/** Payload de création d'un lien de paiement */
+export interface CreatePaymentLinkRequest {
+  amount: number
+  description?: string
+  is_reusable?: boolean
+  success_url?: string
+  expires_at?: string
+}
+
+/** Réponse paginée des liens de paiement */
+export interface PaymentLinkListResponse {
+  payment_links: PaymentLink[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** Vue publique d'un lien de paiement (page checkout) */
+export interface CheckoutView {
+  slug: string
+  amount: number
+  currency: string
+  description?: string
+  merchant_name: string
+  is_payable: boolean
+}
+
+/** Statut public d'une transaction de checkout (polling) */
+export interface CheckoutTransactionStatus {
+  id: string
+  status: TransactionStatus
+  amount: number
+  failure_reason?: string
+}
+
+/** Réponse à l'initiation d'un paiement de checkout */
+export interface CheckoutPayResponse {
+  id: string
+  internal_ref: string
+  status: TransactionStatus
+  expires_at: string
+}
+
 // -----------------------------------------------------------------------------
 // Métriques & Dashboard
 // -----------------------------------------------------------------------------

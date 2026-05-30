@@ -8,6 +8,7 @@ import {
   Receipt,
   Key,
   Webhook,
+  Link2,
   LogOut,
   Zap,
   ChevronDown,
@@ -34,6 +35,7 @@ const navigation = [
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Clés API", href: "/api-keys", icon: Key },
   { name: "Webhooks", href: "/webhooks", icon: Webhook },
+  { name: "Liens de paiement", href: "/payment-links", icon: Link2 },
   { name: "Paramètres", href: "/settings", icon: Settings },
   { name: "Support", href: "/support", icon: HelpCircle },
 ]

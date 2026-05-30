@@ -5,14 +5,25 @@ import type { NextRequest } from 'next/server'
 // Middleware Next.js — Protection des routes
 // =============================================================================
 
-// Routes publiques (pas de JWT requis)
+// Routes publiques (pas de JWT requis ; redirigent vers / si déjà connecté)
 const PUBLIC_ROUTES = ['/login', '/register']
+
+// Routes ouvertes : accessibles que l'on soit connecté ou non (checkout payeur)
+const OPEN_ROUTES = ['/pay']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Lire le cookie JWT (le nom du cookie doit correspondre à celui du backend)
   const token = request.cookies.get('kadryza_token')?.value
+
+  // Le checkout payeur est public et ne doit jamais rediriger.
+  const isOpenRoute = OPEN_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  )
+  if (isOpenRoute) {
+    return NextResponse.next()
+  }
 
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
