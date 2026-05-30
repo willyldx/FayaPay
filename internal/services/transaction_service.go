@@ -85,6 +85,64 @@ func (s *TransactionService) notifyPaymentReceived(txID uuid.UUID) {
 	}()
 }
 
+// creditLedgerForPayment records the PAYMENT (+gross) and FEE (-fee) ledger
+// entries for a successful transaction. Idempotent via the unique
+// (transaction_id, entry_type) index — safe if the success path fires twice.
+func (s *TransactionService) creditLedgerForPayment(ctx context.Context, txID uuid.UUID) {
+	txn, err := s.queries.GetTransactionByID(ctx, txID)
+	if err != nil {
+		s.logger.Error("ledger: fetch transaction failed", zap.String("transaction_id", txID.String()), zap.Error(err))
+		return
+	}
+	if exists, eerr := s.queries.LedgerPaymentExists(ctx, &txID); eerr == nil && exists {
+		return // already credited
+	}
+	merchant, err := s.queries.GetMerchantByID(ctx, txn.MerchantID)
+	if err != nil {
+		s.logger.Error("ledger: fetch merchant failed", zap.Error(err))
+		return
+	}
+
+	gross := txn.Amount
+	fee := gross * int64(merchant.FeeBps) / 10000
+
+	payDesc := "Paiement " + txn.Reference
+	if _, err := s.queries.CreateLedgerEntry(ctx, db.CreateLedgerEntryParams{
+		MerchantID:    txn.MerchantID,
+		TransactionID: &txID,
+		EntryType:     "PAYMENT",
+		Amount:        gross,
+		Currency:      "XAF",
+		Description:   &payDesc,
+	}); err != nil {
+		if isUniqueViolation(err) {
+			return // concurrent credit already happened
+		}
+		s.logger.Error("ledger: create PAYMENT failed", zap.Error(err))
+		return
+	}
+
+	if fee > 0 {
+		feeDesc := "Frais Kadryza"
+		if _, err := s.queries.CreateLedgerEntry(ctx, db.CreateLedgerEntryParams{
+			MerchantID:    txn.MerchantID,
+			TransactionID: &txID,
+			EntryType:     "FEE",
+			Amount:        -fee,
+			Currency:      "XAF",
+			Description:   &feeDesc,
+		}); err != nil && !isUniqueViolation(err) {
+			s.logger.Error("ledger: create FEE failed", zap.Error(err))
+		}
+	}
+
+	s.logger.Info("ledger credited",
+		zap.String("transaction_id", txID.String()),
+		zap.Int64("gross", gross),
+		zap.Int64("fee", fee),
+	)
+}
+
 // =============================================================================
 // Initiate — create a new transaction
 // =============================================================================
@@ -360,6 +418,7 @@ func (s *TransactionService) UpdateStatus(
 		s.enqueueWebhook(txID, updated.MerchantID, newStatus)
 	}
 	if newStatus == models.StatusSuccess {
+		s.creditLedgerForPayment(ctx, txID)
 		s.notifyPaymentReceived(txID)
 	}
 
@@ -420,6 +479,7 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 
 	// Enqueue webhook dispatch for SUCCESS.
 	s.enqueueWebhook(txID, txn.MerchantID, models.StatusSuccess)
+	s.creditLedgerForPayment(ctx, txID)
 	s.notifyPaymentReceived(txID)
 
 	s.logger.Info("transaction confirmed via SMS",

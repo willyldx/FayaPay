@@ -91,6 +91,22 @@ sql:
           # text form. (Scanning a custom enum OID into interface{} fails.)
           - column: "payment_links.currency"
             go_type: "string"
+          # Ledger + settlements: nullable FK -> pointer, enum -> string,
+          # genuinely-nullable timestamp -> pointer.
+          - column: "ledger_entries.transaction_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+          - column: "ledger_entries.currency"
+            go_type: "string"
+          - column: "settlements.currency"
+            go_type: "string"
+          - column: "settlements.completed_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
           - db_type: "text"
             nullable: true
             go_type: "string"
@@ -108,6 +124,8 @@ sql:
           - db_type: "currency_type"
             go_type: "string"
           - db_type: "operator_type"
+            go_type: "string"
+          - db_type: "settlement_status"
             go_type: "string"
           - db_type: "bigint"
             go_type: "int64"

@@ -1,0 +1,41 @@
+-- =============================================================================
+-- sqlc queries: settlements
+-- =============================================================================
+
+-- name: CreateSettlement :one
+INSERT INTO settlements (merchant_id, amount, currency, method, destination)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetSettlementByID :one
+SELECT * FROM settlements
+WHERE id = $1;
+
+-- name: ListSettlementsByMerchant :many
+SELECT * FROM settlements
+WHERE merchant_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountSettlementsByMerchant :one
+SELECT COUNT(*) FROM settlements
+WHERE merchant_id = $1;
+
+-- name: GetReservedSettlementTotal :one
+-- Everything that is not failed/cancelled reduces the available balance.
+SELECT COALESCE(SUM(amount), 0)::BIGINT AS total
+FROM settlements
+WHERE merchant_id = $1
+  AND status IN ('PENDING', 'PROCESSING', 'COMPLETED');
+
+-- name: GetSettlementTotalByStatus :one
+SELECT COALESCE(SUM(amount), 0)::BIGINT AS total
+FROM settlements
+WHERE merchant_id = $1 AND status = $2;
+
+-- name: CancelSettlement :one
+UPDATE settlements
+SET status     = 'CANCELLED',
+    updated_at = NOW()
+WHERE id = $1 AND merchant_id = $2 AND status = 'PENDING'
+RETURNING *;

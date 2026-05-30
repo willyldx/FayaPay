@@ -88,6 +88,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, emailSvc, deps.Logger)
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
 	paymentLinkSvc := services.NewPaymentLinkService(deps.DB, deps.Config, deps.Logger)
+	billingSvc := services.NewBillingService(deps.DB, deps.Logger)
 
 	// =========================================================================
 	// Initialize handlers
@@ -98,6 +99,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	webhookHandler := handlers.NewWebhookHandler(webhookSvc, deps.Logger)
 	gatewayHandler := handlers.NewGatewayHandler(deps.Hub, deps.Logger)
 	paymentLinkHandler := handlers.NewPaymentLinkHandler(paymentLinkSvc, transactionSvc, deps.Logger)
+	billingHandler := handlers.NewBillingHandler(billingSvc, deps.Logger)
 
 	// =========================================================================
 	// API v1 routes
@@ -130,6 +132,16 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	// --- Merchant profile routes (JWT auth) — portail merchant ---
 	merchants := v1.Group("/merchants", middleware.JWTAuth(deps.Config.JWTSecret))
 	merchants.Patch("/profile", merchantHandler.UpdateProfile)
+
+	// --- Balance & settlements (JWT auth) ---
+	balanceRoutes := v1.Group("/balance", middleware.JWTAuth(deps.Config.JWTSecret))
+	balanceRoutes.Get("/", billingHandler.GetBalance)
+
+	settlements := v1.Group("/settlements", middleware.JWTAuth(deps.Config.JWTSecret))
+	settlements.Post("/", billingHandler.CreateSettlement)
+	settlements.Get("/", billingHandler.ListSettlements)
+	settlements.Get("/:id", billingHandler.GetSettlement)
+	settlements.Post("/:id/cancel", billingHandler.CancelSettlement)
 
 	// --- Payment links (JWT auth) — dashboard management ---
 	paymentLinks := v1.Group("/payment-links", middleware.JWTAuth(deps.Config.JWTSecret))
