@@ -81,7 +81,7 @@ func (s *BillingService) GetBalance(ctx context.Context, merchantID uuid.UUID) (
 	}
 
 	return &models.Balance{
-		Available:    balance - reserved,
+		Available:    balance - reserved - settled,
 		Reserved:     reserved,
 		TotalVolume:  stats.Gross,
 		TotalFees:    stats.Fees,
@@ -102,7 +102,14 @@ func (s *BillingService) availableBalance(ctx context.Context, merchantID uuid.U
 	if err != nil {
 		return 0, err
 	}
-	return balance - reserved, nil
+	settled, err := s.queries.GetSettlementTotalByStatus(ctx, db.GetSettlementTotalByStatusParams{
+		MerchantID: merchantID,
+		Status:     "COMPLETED",
+	})
+	if err != nil {
+		return 0, err
+	}
+	return balance - reserved - settled, nil
 }
 
 // =============================================================================

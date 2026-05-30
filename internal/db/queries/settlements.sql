@@ -22,11 +22,11 @@ SELECT COUNT(*) FROM settlements
 WHERE merchant_id = $1;
 
 -- name: GetReservedSettlementTotal :one
--- Everything that is not failed/cancelled reduces the available balance.
+-- Money in transit: requested or being processed, not yet paid out.
 SELECT COALESCE(SUM(amount), 0)::BIGINT AS total
 FROM settlements
 WHERE merchant_id = $1
-  AND status IN ('PENDING', 'PROCESSING', 'COMPLETED');
+  AND status IN ('PENDING', 'PROCESSING');
 
 -- name: GetSettlementTotalByStatus :one
 SELECT COALESCE(SUM(amount), 0)::BIGINT AS total
