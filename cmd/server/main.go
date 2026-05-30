@@ -72,7 +72,7 @@ func main() {
 	// =========================================================================
 	// 6. Initialize Asynq (task queue client + worker server)
 	// =========================================================================
-	asynqRedisOpt := asynq.RedisClientOpt{Addr: extractRedisAddr(cfg.RedisURL)}
+	asynqRedisOpt := newAsynqRedisOpt(cfg.RedisURL, logger)
 
 	// Client — used by services to enqueue tasks.
 	asynqClient := asynq.NewClient(asynqRedisOpt)
@@ -267,15 +267,19 @@ func initRedis(cfg *config.Config, logger *zap.Logger) (*redis.Client, error) {
 	return rdb, nil
 }
 
-// extractRedisAddr converts a Redis URL like "redis://localhost:6379" to "localhost:6379"
-// for the Asynq client which expects a host:port format.
-func extractRedisAddr(redisURL string) string {
+// newAsynqRedisOpt builds the Asynq Redis options from REDIS_URL. Asynq does not
+// parse the URL itself, so we must extract the address, password AND db index —
+// otherwise it connects without auth and the Redis server returns NOAUTH.
+func newAsynqRedisOpt(redisURL string, logger *zap.Logger) asynq.RedisClientOpt {
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		// Fallback: assume it's already in host:port format.
-		return redisURL
+		logger.Fatal("invalid REDIS_URL for asynq", zap.Error(err))
 	}
-	return opt.Addr
+	return asynq.RedisClientOpt{
+		Addr:     opt.Addr,
+		Password: opt.Password,
+		DB:       opt.DB,
+	}
 }
 
 // Asynq logger adapter has been moved to internal/workers/scheduler.go
