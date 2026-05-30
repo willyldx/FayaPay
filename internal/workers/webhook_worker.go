@@ -113,7 +113,7 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 			Operator:    models.OperatorType(fmt.Sprint(txn.Operator)),
 			PhoneNumber: txn.PhoneNumber,
 			Status:      models.TransactionStatus(fmt.Sprint(txn.Status)),
-			ConfirmedAt: &txn.ConfirmedAt,
+			ConfirmedAt: txn.ConfirmedAt,
 		},
 		Timestamp: time.Now().UTC(),
 	}

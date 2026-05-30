@@ -492,7 +492,7 @@ func toTransactionModel(t db.Transaction) *models.Transaction {
 		WebhookSent:     t.WebhookSent != nil && *t.WebhookSent,
 		WebhookAttempts: int(derefInt32(t.WebhookAttempts)),
 		InitiatedAt:     t.InitiatedAt,
-		ConfirmedAt:     &t.ConfirmedAt,
+		ConfirmedAt:     t.ConfirmedAt,
 		ExpiresAt:       t.ExpiresAt,
 		CreatedAt:       t.CreatedAt,
 		UpdatedAt:       t.UpdatedAt,

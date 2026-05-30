@@ -264,7 +264,7 @@ func (s *WebhookService) DeliverWebhook(ctx context.Context, taskPayload Webhook
 			Operator:    models.OperatorType(fmt.Sprint(txn.Operator)),
 			PhoneNumber: txn.PhoneNumber,
 			Status:      models.TransactionStatus(fmt.Sprint(txn.Status)),
-			ConfirmedAt: &txn.ConfirmedAt,
+			ConfirmedAt: txn.ConfirmedAt,
 		},
 		Timestamp: time.Now().UTC(),
 	}

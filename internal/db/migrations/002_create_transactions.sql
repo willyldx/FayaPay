@@ -89,12 +89,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER transactions_updated_at
+-- CREATE OR REPLACE (PG14+) keeps the migration idempotent / re-runnable.
+CREATE OR REPLACE TRIGGER transactions_updated_at
     BEFORE UPDATE ON transactions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Apply the same trigger to merchants (created in 001).
-CREATE TRIGGER merchants_updated_at
+CREATE OR REPLACE TRIGGER merchants_updated_at
     BEFORE UPDATE ON merchants
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 

@@ -49,6 +49,24 @@ sql:
             go_type:
               import: "time"
               type: "Time"
+          # Genuinely-nullable timestamptz columns must be *time.Time so pgx can
+          # scan SQL NULL. The other timestamptz columns have DEFAULT NOW() and
+          # are never NULL in practice, so they stay time.Time (above).
+          - column: "merchants.verification_token_expires_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+          - column: "merchants.reset_password_expires_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+          - column: "transactions.confirmed_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
           - db_type: "text"
             nullable: true
             go_type: "string"
