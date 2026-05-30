@@ -10,6 +10,7 @@ import {
   KeyRound,
   Webhook,
   Settings,
+  HelpCircle,
   LogOut,
   Loader2,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { label: 'Clés API',        href: '/api-keys',      Icon: KeyRound },
   { label: 'Webhooks',        href: '/webhooks',      Icon: Webhook },
   { label: 'Paramètres',      href: '/settings',      Icon: Settings },
+  { label: 'Support',         href: '/support',       Icon: HelpCircle },
 ]
 
 // =============================================================================

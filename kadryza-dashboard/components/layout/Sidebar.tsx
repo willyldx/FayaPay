@@ -14,7 +14,8 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
-  Settings
+  Settings,
+  HelpCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -27,7 +28,6 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAuthStore } from "@/lib/stores/authStore"
 import { useUiStore } from "@/lib/stores/uiStore"
-import { toast } from "sonner"
 
 const navigation = [
   { name: "Vue d'ensemble", href: "/", icon: LayoutDashboard },
@@ -35,6 +35,7 @@ const navigation = [
   { name: "Clés API", href: "/api-keys", icon: Key },
   { name: "Webhooks", href: "/webhooks", icon: Webhook },
   { name: "Paramètres", href: "/settings", icon: Settings },
+  { name: "Support", href: "/support", icon: HelpCircle },
 ]
 
 export function Sidebar() {
@@ -128,7 +129,7 @@ export function Sidebar() {
               <DropdownMenuItem onClick={() => router.push('/settings')}>
                 Paramètres du compte
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toast.info('Support : Bientôt disponible')}>
+              <DropdownMenuItem onClick={() => router.push('/support')}>
                 Support
               </DropdownMenuItem>
               <DropdownMenuSeparator />
