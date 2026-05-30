@@ -81,3 +81,85 @@ jobs:
 
       - name: Build
         run: go build -o bin/kadryza-backend ./cmd/server
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
+      - name: Generate sqlc
+        run: sqlc generate
+
+      # Static linux/amd64 binary — portable between the CI runner and the VPS
+      # (no glibc/CGO coupling). pgx, redis, fiber, asynq and bcrypt are all pure Go.
+      - name: Build backend binary
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o kadryza-server ./cmd/server
+
+      - name: Copy binary + migrations to VPS staging
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "kadryza-server,internal/db/migrations/*.sql"
+          target: "/tmp/kadryza-backend-deploy"
+          overwrite: true
+
+      - name: Migrate DB, swap binary, restart service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            STAGING=/tmp/kadryza-backend-deploy
+            DEST=/opt/kadryza/kadryza-server
+            DB_CONTAINER=kadryza-postgres
+
+            echo "=== Load DB config (no secrets printed) ==="
+            set -a; . /opt/kadryza/backend.env; set +a
+            : "${DATABASE_URL:?DATABASE_URL missing in backend.env}"
+            DBUSER=$(printf '%s' "$DATABASE_URL" | sed -E 's#^[a-zA-Z]+://([^:/@]+).*#\1#')
+            DBNAME=$(printf '%s' "$DATABASE_URL" | sed -E 's#.*@[^/]+/([^?]+).*#\1#')
+            echo "db user=$DBUSER name=$DBNAME container=$DB_CONTAINER"
+
+            echo "=== Apply migrations (idempotent, in lexical order) ==="
+            for f in $(ls -1 "$STAGING"/internal/db/migrations/*.sql | sort); do
+              echo "-- $(basename "$f")"
+              docker exec -i "$DB_CONTAINER" psql -U "$DBUSER" -d "$DBNAME" -v ON_ERROR_STOP=1 < "$f"
+            done
+
+            echo "=== Swap binary (backup first) ==="
+            BAK="${DEST}.bak.$(date +%s)"
+            cp -f "$DEST" "$BAK"
+            sudo systemctl stop kadryza-backend
+            install -m 0755 "$STAGING/kadryza-server" "$DEST"
+            sudo systemctl start kadryza-backend
+            sleep 3
+
+            echo "=== Health check (rollback on failure) ==="
+            if ! curl -fsS -m 10 http://localhost:8080/health >/dev/null; then
+              echo "❌ health check failed — rolling back to $BAK"
+              sudo systemctl stop kadryza-backend
+              install -m 0755 "$BAK" "$DEST"
+              sudo systemctl start kadryza-backend
+              exit 1
+            fi
+            echo "service active: $(systemctl is-active kadryza-backend)"
+
+            echo "=== Cleanup (keep 3 most recent backups) ==="
+            rm -rf "$STAGING"
+            ls -1t ${DEST}.bak.* 2>/dev/null | tail -n +4 | xargs -r rm -f
+            echo "✅ Backend deploy complete"
