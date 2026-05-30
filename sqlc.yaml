@@ -74,6 +74,19 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
               pointer: true
+          # payment_link_id: nullable UUID FK -> *uuid.UUID so normal (non-link)
+          # transactions store NULL instead of the zero UUID.
+          - column: "transactions.payment_link_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+          # payment_links.expires_at is genuinely nullable -> *time.Time.
+          - column: "payment_links.expires_at"
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
           - db_type: "text"
             nullable: true
             go_type: "string"

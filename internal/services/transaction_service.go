@@ -121,14 +121,15 @@ func (s *TransactionService) Initiate(
 	}
 
 	txn, err := qtx.CreateTransaction(ctx, db.CreateTransactionParams{
-		MerchantID:  merchantID,
-		Reference:   req.Reference,
-		InternalRef: internalRef,
-		Amount:      req.Amount,
-		Currency:    string(req.Currency),
-		Operator:    string(req.Operator),
-		PhoneNumber: req.PhoneNumber,
-		Description: description,
+		MerchantID:    merchantID,
+		Reference:     req.Reference,
+		InternalRef:   internalRef,
+		Amount:        req.Amount,
+		Currency:      string(req.Currency),
+		Operator:      string(req.Operator),
+		PhoneNumber:   req.PhoneNumber,
+		Description:   description,
+		PaymentLinkID: req.PaymentLinkID,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {

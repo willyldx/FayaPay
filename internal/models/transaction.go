@@ -126,6 +126,10 @@ type CreateTransactionRequest struct {
 	Operator    OperatorType `json:"operator" validate:"required"`
 	PhoneNumber string       `json:"phone_number" validate:"required,max=20"`
 	Description string       `json:"description,omitempty" validate:"max=255"`
+
+	// PaymentLinkID is set internally when a transaction originates from a
+	// hosted-checkout payment link. Never populated from the public JSON body.
+	PaymentLinkID *uuid.UUID `json:"-"`
 }
 
 // Validate performs business rule validation beyond struct tags.

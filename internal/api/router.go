@@ -87,6 +87,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	merchantSvc := services.NewMerchantService(deps.DB, deps.Config, deps.Logger, emailSvc)
 	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, deps.Logger)
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
+	paymentLinkSvc := services.NewPaymentLinkService(deps.DB, deps.Config, deps.Logger)
 
 	// =========================================================================
 	// Initialize handlers
@@ -96,6 +97,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	transactionHandler := handlers.NewTransactionHandler(transactionSvc, deps.Logger)
 	webhookHandler := handlers.NewWebhookHandler(webhookSvc, deps.Logger)
 	gatewayHandler := handlers.NewGatewayHandler(deps.Hub, deps.Logger)
+	paymentLinkHandler := handlers.NewPaymentLinkHandler(paymentLinkSvc, transactionSvc, deps.Logger)
 
 	// =========================================================================
 	// API v1 routes
@@ -128,6 +130,23 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	// --- Merchant profile routes (JWT auth) — portail merchant ---
 	merchants := v1.Group("/merchants", middleware.JWTAuth(deps.Config.JWTSecret))
 	merchants.Patch("/profile", merchantHandler.UpdateProfile)
+
+	// --- Payment links (JWT auth) — dashboard management ---
+	paymentLinks := v1.Group("/payment-links", middleware.JWTAuth(deps.Config.JWTSecret))
+	paymentLinks.Post("/", paymentLinkHandler.Create)
+	paymentLinks.Get("/", paymentLinkHandler.List)
+	paymentLinks.Get("/:id", paymentLinkHandler.Get)
+	paymentLinks.Patch("/:id", paymentLinkHandler.SetActive)
+	paymentLinks.Delete("/:id", paymentLinkHandler.Delete)
+
+	// --- Public hosted checkout (no auth, rate-limited) ---
+	// FIX: /tx/:id is registered before /:slug so the status route is matched first.
+	checkout := v1.Group("/checkout",
+		middleware.RateLimit(deps.Redis, middleware.DefaultRateLimitConfig()),
+	)
+	checkout.Get("/tx/:id", paymentLinkHandler.CheckoutStatus)
+	checkout.Get("/:slug", paymentLinkHandler.GetCheckout)
+	checkout.Post("/:slug/pay", paymentLinkHandler.Pay)
 
 	// --- Transaction routes (API Key auth + email verification + rate limiting) ---
 	transactions := v1.Group("/transactions",
