@@ -39,3 +39,27 @@ SET status     = 'CANCELLED',
     updated_at = NOW()
 WHERE id = $1 AND merchant_id = $2 AND status = 'PENDING'
 RETURNING *;
+
+-- name: MarkSettlementProcessing :one
+UPDATE settlements
+SET status     = 'PROCESSING',
+    updated_at = NOW()
+WHERE id = $1 AND status = 'PENDING'
+RETURNING *;
+
+-- name: CompleteSettlement :one
+UPDATE settlements
+SET status       = 'COMPLETED',
+    completed_at = NOW(),
+    updated_at   = NOW()
+WHERE id = $1 AND status IN ('PENDING', 'PROCESSING')
+RETURNING *;
+
+-- name: FailSettlement :one
+UPDATE settlements
+SET status         = 'FAILED',
+    failure_reason = $2,
+    completed_at   = NOW(),
+    updated_at     = NOW()
+WHERE id = $1 AND status IN ('PENDING', 'PROCESSING')
+RETURNING *;

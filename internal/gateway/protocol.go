@@ -9,6 +9,7 @@ package gateway
 const (
 	// Backend → Gateway (instructions)
 	TypeInitiatePayment = "INITIATE_PAYMENT"
+	TypeInitiatePayout  = "INITIATE_PAYOUT"
 	TypePing            = "PING"
 
 	// Gateway → Backend (reports)
@@ -34,6 +35,15 @@ type InitiatePaymentMessage struct {
 	Amount        int64  `json:"amount"`
 	PhoneNumber   string `json:"phone_number"`
 	Operator      string `json:"operator"`
+}
+
+// InitiatePayoutMessage instructs the gateway to send money to a recipient (B2C).
+type InitiatePayoutMessage struct {
+	Type         string `json:"type"`
+	SettlementID string `json:"settlement_id"`
+	Amount       int64  `json:"amount"`
+	Destination  string `json:"destination"` // recipient phone (mobile money) or account
+	Operator     string `json:"operator"`    // AIRTEL | MOOV
 }
 
 // PingMessage requests an immediate heartbeat from the gateway.

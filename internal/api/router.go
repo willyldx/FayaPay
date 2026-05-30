@@ -88,7 +88,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	transactionSvc := services.NewTransactionService(deps.DB, deps.Hub, deps.AsynqClient, emailSvc, deps.Logger)
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
 	paymentLinkSvc := services.NewPaymentLinkService(deps.DB, deps.Config, deps.Logger)
-	billingSvc := services.NewBillingService(deps.DB, deps.Logger)
+	billingSvc := services.NewBillingService(deps.DB, deps.Hub, deps.Logger)
 
 	// =========================================================================
 	// Initialize handlers
@@ -188,6 +188,8 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	)
 	gw.Get("/ws", gatewayHandler.UpgradeCheck, gatewayHandler.HandleWebSocket())
 	gw.Get("/status", gatewayHandler.Status)
+	// Gateway reports payout (disbursement) results here.
+	gw.Post("/settlements/:id/result", billingHandler.PayoutResult)
 
 	// --- Dashboard routes (JWT auth) — lecture seule pour le portail merchant ---
 	// Ces routes permettent au dashboard web d'afficher les données via JWT Bearer.

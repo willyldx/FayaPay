@@ -114,3 +114,31 @@ func (h *BillingHandler) CancelSettlement(c *fiber.Ctx) error {
 	}
 	return c.JSON(st)
 }
+
+// PayoutResult handles POST /v1/gateway/settlements/:id/result (gateway token).
+// The gateway reports the disbursement outcome: COMPLETED or FAILED.
+func (h *BillingHandler) PayoutResult(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id", "code": "INVALID_ID"})
+	}
+	var body struct {
+		Status        string `json:"status"`
+		FailureReason string `json:"failure_reason"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body", "code": "INVALID_BODY"})
+	}
+	st, err := h.service.ProcessPayoutResult(c.Context(), id, body.Status, body.FailureReason)
+	if err != nil {
+		if errors.Is(err, services.ErrSettlementNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "settlement not found or already finalized", "code": "NOT_FOUND"})
+		}
+		if isValidationError(err) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error(), "code": "VALIDATION_ERROR"})
+		}
+		h.logger.Error("payout result failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to process payout result", "code": "INTERNAL_ERROR"})
+	}
+	return c.JSON(st)
+}

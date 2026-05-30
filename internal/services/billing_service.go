@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
+	"github.com/kadryza/kadryza-backend/internal/gateway"
 	"github.com/kadryza/kadryza-backend/internal/models"
 )
 
@@ -35,14 +36,16 @@ var validSettlementMethods = map[string]bool{"AIRTEL": true, "MOOV": true, "BANK
 type BillingService struct {
 	pool    *pgxpool.Pool
 	queries *db.Queries
+	hub     *gateway.Hub
 	logger  *zap.Logger
 }
 
 // NewBillingService creates a new BillingService.
-func NewBillingService(pool *pgxpool.Pool, logger *zap.Logger) *BillingService {
+func NewBillingService(pool *pgxpool.Pool, hub *gateway.Hub, logger *zap.Logger) *BillingService {
 	return &BillingService{
 		pool:    pool,
 		queries: db.New(pool),
+		hub:     hub,
 		logger:  logger.Named("billing-svc"),
 	}
 }
@@ -144,8 +147,80 @@ func (s *BillingService) CreateSettlement(ctx context.Context, merchantID uuid.U
 		zap.String("settlement_id", settlement.ID.String()),
 		zap.Int64("amount", req.Amount),
 	)
+
+	// Best-effort dispatch to the gateway (mobile money). May move to PROCESSING.
+	settlement = s.dispatchSettlement(ctx, settlement)
+
 	result := toSettlementPublic(settlement)
 	return &result, nil
+}
+
+// dispatchSettlement instructs the gateway to disburse the payout (B2C). For
+// mobile-money methods, if a gateway is connected for the operator it sends an
+// INITIATE_PAYOUT and moves the settlement to PROCESSING. Best-effort: on any
+// failure the settlement stays PENDING for later processing.
+func (s *BillingService) dispatchSettlement(ctx context.Context, st db.Settlement) db.Settlement {
+	if s.hub == nil || (st.Method != "AIRTEL" && st.Method != "MOOV") {
+		return st // BANK / unknown methods are settled out-of-band
+	}
+	msg := gateway.InitiatePayoutMessage{
+		Type:         gateway.TypeInitiatePayout,
+		SettlementID: st.ID.String(),
+		Amount:       st.Amount,
+		Destination:  st.Destination,
+		Operator:     st.Method,
+	}
+	if err := s.hub.SendToOperator(st.Method, msg); err != nil {
+		s.logger.Warn("payout not dispatched — left PENDING",
+			zap.String("settlement_id", st.ID.String()), zap.Error(err))
+		return st
+	}
+	updated, err := s.queries.MarkSettlementProcessing(ctx, st.ID)
+	if err != nil {
+		s.logger.Error("failed to mark settlement processing", zap.Error(err))
+		return st
+	}
+	s.logger.Info("payout dispatched to gateway",
+		zap.String("settlement_id", st.ID.String()), zap.String("operator", st.Method))
+	return updated
+}
+
+// ProcessPayoutResult applies a gateway-reported payout result (COMPLETED or
+// FAILED) to a settlement. Called from the gateway-authenticated callback.
+func (s *BillingService) ProcessPayoutResult(ctx context.Context, id uuid.UUID, status, reason string) (*models.SettlementPublic, error) {
+	switch strings.ToUpper(strings.TrimSpace(status)) {
+	case "COMPLETED", "SUCCESS":
+		st, err := s.queries.CompleteSettlement(ctx, id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrSettlementNotFound // not found or already terminal
+			}
+			return nil, fmt.Errorf("completing settlement: %w", err)
+		}
+		s.logger.Info("settlement completed", zap.String("settlement_id", id.String()))
+		result := toSettlementPublic(st)
+		return &result, nil
+
+	case "FAILED", "FAILURE":
+		var rp *string
+		if r := strings.TrimSpace(reason); r != "" {
+			rp = &r
+		}
+		st, err := s.queries.FailSettlement(ctx, db.FailSettlementParams{ID: id, FailureReason: rp})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrSettlementNotFound
+			}
+			return nil, fmt.Errorf("failing settlement: %w", err)
+		}
+		s.logger.Info("settlement failed",
+			zap.String("settlement_id", id.String()), zap.String("reason", reason))
+		result := toSettlementPublic(st)
+		return &result, nil
+
+	default:
+		return nil, fmt.Errorf("validation: status must be COMPLETED or FAILED")
+	}
 }
 
 // ListSettlements returns the merchant's payout history.
