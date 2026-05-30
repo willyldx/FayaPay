@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   Receipt,
+  Wallet,
   Key,
   Webhook,
   Link2,
@@ -33,6 +34,7 @@ import { useUiStore } from "@/lib/stores/uiStore"
 const navigation = [
   { name: "Vue d'ensemble", href: "/", icon: LayoutDashboard },
   { name: "Transactions", href: "/transactions", icon: Receipt },
+  { name: "Solde", href: "/balance", icon: Wallet },
   { name: "Clés API", href: "/api-keys", icon: Key },
   { name: "Webhooks", href: "/webhooks", icon: Webhook },
   { name: "Liens de paiement", href: "/payment-links", icon: Link2 },

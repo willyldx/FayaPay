@@ -158,6 +158,59 @@ export interface DashboardStats {
 }
 
 // -----------------------------------------------------------------------------
+// Solde & Settlements (Chapitre 2)
+// -----------------------------------------------------------------------------
+
+/** Aperçu du solde du marchand (montants en entiers XAF) */
+export interface Balance {
+  available: number
+  reserved: number
+  total_volume: number
+  total_fees: number
+  total_settled: number
+  payment_count: number
+  currency: string
+  fee_bps: number
+}
+
+/** Statut d'un settlement (reversement) */
+export type SettlementStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+
+/** Reversement (payout) */
+export interface Settlement {
+  id: string
+  amount: number
+  currency: string
+  status: SettlementStatus
+  method: string              // AIRTEL | MOOV | BANK
+  destination: string
+  failure_reason?: string
+  requested_at: string
+  completed_at?: string
+  created_at: string
+}
+
+/** Payload de demande de retrait */
+export interface CreateSettlementRequest {
+  amount: number
+  method: string
+  destination: string
+}
+
+/** Réponse paginée des settlements */
+export interface SettlementListResponse {
+  settlements: Settlement[]
+  total: number
+  limit: number
+  offset: number
+}
+
+// -----------------------------------------------------------------------------
 // Réponses API
 // -----------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ import {
   X,
   LayoutDashboard,
   ArrowLeftRight,
+  Wallet,
   KeyRound,
   Webhook,
   Link2,
@@ -24,6 +25,7 @@ import { useAuthStore } from '@/lib/stores/authStore'
 const NAV_ITEMS = [
   { label: 'Vue d\'ensemble', href: '/',             Icon: LayoutDashboard },
   { label: 'Transactions',    href: '/transactions',  Icon: ArrowLeftRight },
+  { label: 'Solde',           href: '/balance',       Icon: Wallet },
   { label: 'Clés API',        href: '/api-keys',      Icon: KeyRound },
   { label: 'Webhooks',        href: '/webhooks',      Icon: Webhook },
   { label: 'Liens de paiement', href: '/payment-links', Icon: Link2 },
