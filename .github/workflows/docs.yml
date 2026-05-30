@@ -64,7 +64,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            set -e
+            set -eo pipefail
             DEPLOY_DIR="/opt/kadryza/kadryza-docs"
             STAGING="/tmp/kadryza-deploy"
             
@@ -82,11 +82,13 @@ jobs:
             
             echo "=== Installing dependencies ==="
             cd "$DEPLOY_DIR"
-            npm install 2>&1 | tail -5
-            
+            npm install
+
+            # No '| tail' so a build failure fails the job (set -e) instead of
+            # silently restarting pm2 on a broken build.
             echo "=== Building ==="
-            npm run build 2>&1 | tail -10
-            
+            npm run build
+
             echo "=== Restarting ==="
             pm2 restart kadryza-docs
             

@@ -38,8 +38,10 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_API_URL: https://api.kadryza.app
-          NEXT_PUBLIC_APP_NAME: Kadryza
+          # Configurable via repo variables; the production value lives in the
+          # VPS .env.local and is used by the deploy job's on-server build.
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.kadryza.app' }}
+          NEXT_PUBLIC_APP_NAME: ${{ vars.NEXT_PUBLIC_APP_NAME || 'Kadryza' }}
 
   deploy:
     needs: build
@@ -67,7 +69,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            set -e
+            set -eo pipefail
             DEPLOY_DIR="/opt/kadryza/kadryza-dashboard"
             STAGING="/tmp/kadryza-dash-deploy"
             
@@ -81,13 +83,14 @@ jobs:
             
             echo "=== Installing dependencies ==="
             cd "$DEPLOY_DIR"
-            npm install 2>&1 | tail -5
-            
+            npm install
+
+            # Build using the VPS .env.local for NEXT_PUBLIC_* (correct domain).
+            # No '| tail' so a build failure actually fails the job (set -e) and we
+            # never restart pm2 on a broken/missing .next build.
             echo "=== Building ==="
-            NEXT_PUBLIC_API_URL=https://api.kadryza.app \
-            NEXT_PUBLIC_APP_NAME=Kadryza \
-            npm run build 2>&1 | tail -10
-            
+            npm run build
+
             echo "=== Restarting ==="
             pm2 restart kadryza-dashboard
             
