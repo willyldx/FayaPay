@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"html/template"
 	"net/smtp"
@@ -75,10 +76,27 @@ func (s *EmailService) SendPasswordResetEmail(email, token, name string) error {
 	return nil
 }
 
-// sendMail sends an email via SMTP with TLS on port 587.
+// sendMail sends an HTML email via SMTP.
+//   - Port 465  → implicit TLS (SMTPS).
+//   - Port 587/25 → STARTTLS (handled by smtp.SendMail).
+// If SMTP is not configured (empty host), it logs a warning and skips sending
+// so that registration / password-reset flows don't fail on a missing config.
 func (s *EmailService) sendMail(to, subject, htmlBody string) error {
+	host := strings.TrimSpace(s.config.SMTPHost)
+	if host == "" {
+		s.logger.Warn("SMTP not configured (SMTP_HOST empty) — email not sent",
+			zap.String("to", to),
+			zap.String("subject", subject),
+		)
+		return nil
+	}
+
 	from := s.config.SMTPFrom
-	addr := fmt.Sprintf("%s:%d", s.config.SMTPHost, s.config.SMTPPort)
+	port := s.config.SMTPPort
+	if port == 0 {
+		port = 587
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
 
 	// Build RFC 2822 message with MIME headers.
 	var msg bytes.Buffer
@@ -90,17 +108,55 @@ func (s *EmailService) sendMail(to, subject, htmlBody string) error {
 	msg.WriteString("\r\n")
 	msg.WriteString(htmlBody)
 
-	auth := smtp.PlainAuth("", s.config.SMTPUser, s.config.SMTPPassword, s.config.SMTPHost)
+	auth := smtp.PlainAuth("", s.config.SMTPUser, s.config.SMTPPassword, host)
 
-	if err := smtp.SendMail(addr, auth, from, []string{to}, msg.Bytes()); err != nil {
-		s.logger.Error("SMTP send failed",
-			zap.String("to", to),
-			zap.Error(err),
-		)
+	var err error
+	if port == 465 {
+		err = s.sendMailImplicitTLS(addr, host, auth, from, to, msg.Bytes())
+	} else {
+		err = smtp.SendMail(addr, auth, from, []string{to}, msg.Bytes())
+	}
+	if err != nil {
+		s.logger.Error("SMTP send failed", zap.String("to", to), zap.Error(err))
 		return fmt.Errorf("SMTP send: %w", err)
 	}
-
 	return nil
+}
+
+// sendMailImplicitTLS sends a message over an implicit-TLS connection (port 465).
+func (s *EmailService) sendMailImplicitTLS(addr, host string, auth smtp.Auth, from, to string, raw []byte) error {
+	conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: host})
+	if err != nil {
+		return fmt.Errorf("TLS dial: %w", err)
+	}
+	defer conn.Close()
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("SMTP client: %w", err)
+	}
+	defer c.Close()
+
+	if err := c.Auth(auth); err != nil {
+		return fmt.Errorf("auth: %w", err)
+	}
+	if err := c.Mail(from); err != nil {
+		return fmt.Errorf("MAIL FROM: %w", err)
+	}
+	if err := c.Rcpt(to); err != nil {
+		return fmt.Errorf("RCPT TO: %w", err)
+	}
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("DATA: %w", err)
+	}
+	if _, err := w.Write(raw); err != nil {
+		return fmt.Errorf("write body: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close body: %w", err)
+	}
+	return c.Quit()
 }
 
 // renderTemplate renders an HTML template with the given data.
