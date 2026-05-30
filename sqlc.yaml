@@ -102,6 +102,8 @@ sql:
             go_type: "string"
           - column: "settlements.currency"
             go_type: "string"
+          - column: "settlements.status"
+            go_type: "string"
           - column: "settlements.completed_at"
             go_type:
               import: "time"
