@@ -118,7 +118,7 @@ func (h *TimeoutHandler) expireTransaction(ctx context.Context, txn db.Transacti
 		"reason": failureReason,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: txn.ID,
+		TransactionID: &txn.ID,
 		MerchantID:    txn.MerchantID,
 		EventType:     models.AuditEventTransactionTimeout,
 		Payload:       auditPayload,

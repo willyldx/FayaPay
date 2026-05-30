@@ -67,6 +67,13 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+          # Nullable UUID FK — must be *uuid.UUID so merchant-only audit events
+          # store NULL instead of the zero UUID (which violates the FK to transactions).
+          - column: "audit_logs.transaction_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
           - db_type: "text"
             nullable: true
             go_type: "string"

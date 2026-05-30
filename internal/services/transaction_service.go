@@ -145,7 +145,7 @@ func (s *TransactionService) Initiate(
 		"phone_number": req.PhoneNumber,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: txn.ID,
+		TransactionID: &txn.ID,
 		MerchantID:    merchantID,
 		EventType:     models.AuditEventTransactionInitiated,
 		Payload:       auditPayload,
@@ -318,7 +318,7 @@ func (s *TransactionService) UpdateStatus(
 		"reason": derefString(failureReason),
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: txID,
+		TransactionID: &txID,
 		MerchantID:    updated.MerchantID,
 		EventType:     "STATUS_CHANGED",
 		Payload:       auditPayload,
@@ -378,7 +378,7 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 		"confirmed_at": txn.ConfirmedAt,
 	})
 	_, err = qtx.CreateAuditLog(ctx, db.CreateAuditLogParams{
-		TransactionID: txID,
+		TransactionID: &txID,
 		MerchantID:    txn.MerchantID,
 		EventType:     models.AuditEventSMSReceived,
 		Payload:       auditPayload,

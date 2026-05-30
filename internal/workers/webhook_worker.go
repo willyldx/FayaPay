@@ -167,7 +167,7 @@ func (h *WebhookHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		"event_type":   payload.EventType,
 	})
 	h.queries.CreateAuditLog(ctx, db.CreateAuditLogParams{ //nolint:errcheck
-		TransactionID: txID,
+		TransactionID: &txID,
 		MerchantID:    merchantID,
 		EventType:     models.AuditEventWebhookSent,
 		Payload:       auditPayload,
@@ -188,7 +188,7 @@ func (h *WebhookHandler) logAuditWebhookFailed(ctx context.Context, txID, mercha
 		"reason": reason,
 	})
 	h.queries.CreateAuditLog(ctx, db.CreateAuditLogParams{ //nolint:errcheck
-		TransactionID: txID,
+		TransactionID: &txID,
 		MerchantID:    merchantID,
 		EventType:     models.AuditEventWebhookFailed,
 		Payload:       auditPayload,
