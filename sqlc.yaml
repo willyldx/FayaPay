@@ -87,9 +87,15 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
-          # Force the enum column to a plain string; pgx decodes the enum from its
+          # Force enum columns to plain strings; pgx decodes the enum from its
           # text form. (Scanning a custom enum OID into interface{} fails.)
           - column: "payment_links.currency"
+            go_type: "string"
+          - column: "transactions.currency"
+            go_type: "string"
+          - column: "transactions.operator"
+            go_type: "string"
+          - column: "transactions.status"
             go_type: "string"
           # Ledger + settlements: nullable FK -> pointer, enum -> string,
           # genuinely-nullable timestamp -> pointer.
