@@ -87,6 +87,10 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+          # Force the enum column to a plain string; pgx decodes the enum from its
+          # text form. (Scanning a custom enum OID into interface{} fails.)
+          - column: "payment_links.currency"
+            go_type: "string"
           - db_type: "text"
             nullable: true
             go_type: "string"
