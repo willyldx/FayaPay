@@ -496,7 +496,7 @@ func (s *TransactionService) HandleSMSConfirmation(ctx context.Context, txID uui
 
 	txn, err := qtx.ConfirmTransaction(ctx, db.ConfirmTransactionParams{
 		ID:     txID,
-		SmsRaw: smsRaw,
+		SmsRaw: &smsRaw,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -622,7 +622,7 @@ func toTransactionModel(t db.Transaction) *models.Transaction {
 		Status:          models.TransactionStatus(fmt.Sprint(t.Status)),
 		GatewayID:       t.GatewayID,
 		USSDSessionID:   t.UssdSessionID,
-		SMSRaw:          &t.SmsRaw,
+		SMSRaw:          t.SmsRaw,
 		FailureReason:   t.FailureReason,
 		WebhookSent:     t.WebhookSent != nil && *t.WebhookSent,
 		WebhookAttempts: int(derefInt32(t.WebhookAttempts)),

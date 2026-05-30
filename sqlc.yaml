@@ -97,6 +97,11 @@ sql:
             go_type: "string"
           - column: "transactions.status"
             go_type: "string"
+          # Nullable TEXT — must be *string so pgx can scan NULL.
+          - column: "transactions.sms_raw"
+            go_type:
+              type: "string"
+              pointer: true
           # Ledger + settlements: nullable FK -> pointer, enum -> string,
           # genuinely-nullable timestamp -> pointer.
           - column: "ledger_entries.transaction_id"
