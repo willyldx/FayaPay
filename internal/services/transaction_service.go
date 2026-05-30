@@ -155,32 +155,46 @@ func (s *TransactionService) creditLedgerForPayment(ctx context.Context, txID uu
 func (s *TransactionService) scheduleSandboxResolve(txn db.Transaction) {
 	go func() {
 		time.Sleep(2 * time.Second)
-		resolve, status := sandboxOutcome(txn.PhoneNumber)
-		if !resolve {
-			return // stays PENDING -> handled by the timeout worker
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if _, err := s.UpdateStatus(ctx, txn.ID, status, nil); err != nil {
-			s.logger.Warn("sandbox resolve failed",
-				zap.String("transaction_id", txn.ID.String()), zap.Error(err))
+		switch sandboxOutcome(txn.PhoneNumber) {
+		case sandboxSuccess:
+			// Use the SMS-confirmation path (PENDING -> SUCCESS) like a real payment.
+			if err := s.HandleSMSConfirmation(ctx, txn.ID, "SANDBOX: simulated successful payment"); err != nil {
+				s.logger.Warn("sandbox confirm failed",
+					zap.String("transaction_id", txn.ID.String()), zap.Error(err))
+			}
+		case sandboxFailure:
+			reason := "SANDBOX_SIMULATED_FAILURE"
+			if _, err := s.UpdateStatus(ctx, txn.ID, models.StatusFailed, &reason); err != nil {
+				s.logger.Warn("sandbox fail failed",
+					zap.String("transaction_id", txn.ID.String()), zap.Error(err))
+			}
+		default:
+			// stays PENDING -> handled by the timeout worker (TIMEOUT)
 		}
 	}()
 }
+
+const (
+	sandboxSuccess = "success"
+	sandboxFailure = "failure"
+	sandboxPending = "pending"
+)
 
 // sandboxOutcome maps a phone number to a deterministic test outcome:
 //
 //	contains "0001" -> FAILED
 //	contains "0002" -> stays PENDING (will TIMEOUT)
 //	otherwise       -> SUCCESS
-func sandboxOutcome(phone string) (resolve bool, status models.TransactionStatus) {
+func sandboxOutcome(phone string) string {
 	switch {
 	case strings.Contains(phone, "0001"):
-		return true, models.StatusFailed
+		return sandboxFailure
 	case strings.Contains(phone, "0002"):
-		return false, ""
+		return sandboxPending
 	default:
-		return true, models.StatusSuccess
+		return sandboxSuccess
 	}
 }
 
