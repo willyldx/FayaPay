@@ -5,6 +5,7 @@ import { Plus, Key } from 'lucide-react'
 import { useApiKeys } from '@/lib/hooks/useApiKeys'
 import { ApiKeyCard } from '@/components/api-keys/ApiKeyCard'
 import { CreateApiKeyModal } from '@/components/api-keys/CreateApiKeyModal'
+import { SandboxCard } from '@/components/api-keys/SandboxCard'
 
 // =============================================================================
 // Page Clés API — /api-keys
@@ -13,6 +14,9 @@ import { CreateApiKeyModal } from '@/components/api-keys/CreateApiKeyModal'
 export default function ApiKeysPage() {
   const { data: keys, isLoading } = useApiKeys()
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // Les clés de production uniquement (la clé de test est gérée par la SandboxCard)
+  const liveKeys = keys?.filter((k) => !k.is_test)
 
   return (
     <div className="space-y-6 animate-in">
@@ -64,7 +68,7 @@ export default function ApiKeysPage() {
             </div>
           ))}
         </div>
-      ) : !keys || keys.length === 0 ? (
+      ) : !liveKeys || liveKeys.length === 0 ? (
         <div className="card">
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
@@ -87,11 +91,14 @@ export default function ApiKeysPage() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {keys.map((key) => (
+          {liveKeys.map((key) => (
             <ApiKeyCard key={key.id} apiKey={key} />
           ))}
         </div>
       )}
+
+      {/* Mode test (Sandbox) */}
+      <SandboxCard />
 
       {/* Modal création */}
       <CreateApiKeyModal

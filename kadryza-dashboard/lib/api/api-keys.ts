@@ -36,3 +36,13 @@ export function createApiKey(
 export function revokeApiKey(id: string): Promise<void> {
   return apiClient.delete<void>(`/auth/api-keys/${id}`)
 }
+
+/**
+ * Génère (ou régénère) la clé API de test (sandbox).
+ * La clé complète (api_key) est retournée UNE SEULE FOIS.
+ *
+ * POST /v1/auth/api-keys/test
+ */
+export function generateTestApiKey(): Promise<ApiKey> {
+  return apiClient.post<ApiKey>('/auth/api-keys/test')
+}

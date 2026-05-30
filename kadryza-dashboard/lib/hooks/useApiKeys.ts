@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getApiKeys, createApiKey, revokeApiKey } from '@/lib/api/api-keys'
+import { getApiKeys, createApiKey, revokeApiKey, generateTestApiKey } from '@/lib/api/api-keys'
 import { toast } from 'sonner'
 
 // =============================================================================
@@ -60,6 +60,24 @@ export function useRevokeApiKey() {
     },
     onError: () => {
       toast.error('Erreur lors de la révocation de la clé')
+    },
+  })
+}
+
+/**
+ * Génère (ou régénère) la clé API de test (sandbox).
+ * La clé complète n'est disponible qu'une seule fois dans le résultat.
+ */
+export function useGenerateTestApiKey() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => generateTestApiKey(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: apiKeyKeys.all })
+    },
+    onError: () => {
+      toast.error('Erreur lors de la génération de la clé de test')
     },
   })
 }

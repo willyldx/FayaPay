@@ -56,9 +56,12 @@ export interface Merchant {
 export interface ApiKey {
   id: string
   prefix: string              // "kadryza_live_xxxx" — affiché tronqué
+  is_test?: boolean           // clé sandbox (kadryza_test_)
   created_at: string
   /** La clé complète n'est retournée qu'à la création — une seule fois */
   full_key?: string
+  /** Le backend renvoie api_key (clé complète) à la génération de la clé test */
+  api_key?: string
 }
 
 /** Endpoint webhook configuré par le merchant */
