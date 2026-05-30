@@ -5,13 +5,23 @@ on:
     branches: [main]
     paths:
       - 'kadryza-dashboard/**'
+      - 'deploy/deploy-frontend.sh'
       - '.github/workflows/dashboard.yml'
   pull_request:
     branches: [main]
     paths:
       - 'kadryza-dashboard/**'
+      - 'deploy/deploy-frontend.sh'
       - '.github/workflows/dashboard.yml'
   workflow_dispatch:
+
+# Serialize deploys: never let two dashboard runs deploy at once. We queue
+# (cancel-in-progress: false) rather than cancel, so an in-flight deploy is
+# never interrupted mid-build. The on-VPS flock additionally serializes
+# against manual deploys.
+concurrency:
+  group: deploy-dashboard
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -51,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync files to VPS
+      - name: Sync source to VPS staging
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -62,41 +72,24 @@ jobs:
           strip_components: 1
           overwrite: true
 
-      - name: Build and restart on VPS
+      - name: Install deploy script on VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/deploy-frontend.sh"
+          target: "/opt/kadryza/bin"
+          strip_components: 1
+          overwrite: true
+
+      - name: Atomic release deploy (build off-path, swap symlink)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            set -eo pipefail
-            DEPLOY_DIR="/opt/kadryza/kadryza-dashboard"
-            STAGING="/tmp/kadryza-dash-deploy"
-            
-            echo "=== Syncing source files ==="
-            for dir in app components lib hooks public styles; do
-              [ -d "$STAGING/$dir" ] && cp -r "$STAGING/$dir/" "$DEPLOY_DIR/$dir/"
-            done
-            for file in package.json next.config.mjs tsconfig.json tailwind.config.ts postcss.config.mjs components.json; do
-              [ -f "$STAGING/$file" ] && cp -f "$STAGING/$file" "$DEPLOY_DIR/$file"
-            done
-            
-            echo "=== Installing dependencies ==="
-            cd "$DEPLOY_DIR"
-            npm install
-
-            # Build using the VPS .env.local for NEXT_PUBLIC_* (correct domain).
-            # rm -rf .next avoids stale route-type errors when routes change.
-            # No '| tail' so a build failure actually fails the job (set -e) and we
-            # never restart pm2 on a broken/missing .next build.
-            echo "=== Building ==="
-            rm -rf .next
-            npm run build
-
-            echo "=== Restarting ==="
-            pm2 restart kadryza-dashboard
-            
-            echo "=== Cleanup ==="
-            rm -rf "$STAGING"
-            
-            echo "✅ Dashboard deploy complete!"
+            set -euo pipefail
+            chmod +x /opt/kadryza/bin/deploy-frontend.sh
+            /opt/kadryza/bin/deploy-frontend.sh kadryza-dashboard /tmp/kadryza-dash-deploy kadryza-dashboard 3000

@@ -5,13 +5,21 @@ on:
     branches: [main]
     paths:
       - 'kadryza-docs/**'
+      - 'deploy/deploy-frontend.sh'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main]
     paths:
       - 'kadryza-docs/**'
+      - 'deploy/deploy-frontend.sh'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
+
+# Serialize docs deploys (queue, never cancel an in-flight build). The on-VPS
+# flock additionally serializes against manual deploys.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -46,55 +54,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sync files to VPS
+      - name: Sync source to VPS staging
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "kadryza-docs/pages/,kadryza-docs/components/,kadryza-docs/styles/,kadryza-docs/public/,kadryza-docs/package.json,kadryza-docs/theme.config.tsx,kadryza-docs/next.config.mjs,kadryza-docs/tsconfig.json,kadryza-docs/tailwind.config.js,kadryza-docs/postcss.config.js"
-          target: "/tmp/kadryza-deploy"
+          target: "/tmp/kadryza-docs-deploy"
           strip_components: 1
           overwrite: true
 
-      - name: Build and restart on VPS
+      - name: Install deploy script on VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy/deploy-frontend.sh"
+          target: "/opt/kadryza/bin"
+          strip_components: 1
+          overwrite: true
+
+      - name: Atomic release deploy (build off-path, swap symlink)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            set -eo pipefail
-            DEPLOY_DIR="/opt/kadryza/kadryza-docs"
-            STAGING="/tmp/kadryza-deploy"
-            
-            echo "=== Syncing source files ==="
-            cp -r "$STAGING/pages/" "$DEPLOY_DIR/pages/"
-            cp -r "$STAGING/styles/" "$DEPLOY_DIR/styles/"
-            [ -d "$STAGING/components" ] && cp -r "$STAGING/components/" "$DEPLOY_DIR/components/"
-            [ -d "$STAGING/public" ] && cp -r "$STAGING/public/" "$DEPLOY_DIR/public/"
-            cp -f "$STAGING/package.json" "$DEPLOY_DIR/package.json"
-            cp -f "$STAGING/theme.config.tsx" "$DEPLOY_DIR/theme.config.tsx"
-            [ -f "$STAGING/next.config.mjs" ] && cp -f "$STAGING/next.config.mjs" "$DEPLOY_DIR/next.config.mjs"
-            [ -f "$STAGING/tsconfig.json" ] && cp -f "$STAGING/tsconfig.json" "$DEPLOY_DIR/tsconfig.json"
-            [ -f "$STAGING/tailwind.config.js" ] && cp -f "$STAGING/tailwind.config.js" "$DEPLOY_DIR/tailwind.config.js"
-            [ -f "$STAGING/postcss.config.js" ] && cp -f "$STAGING/postcss.config.js" "$DEPLOY_DIR/postcss.config.js"
-            
-            echo "=== Installing dependencies ==="
-            cd "$DEPLOY_DIR"
-            npm install
-
-            # rm -rf .next avoids stale route-type errors when routes change.
-            # No '| tail' so a build failure fails the job (set -e) instead of
-            # silently restarting pm2 on a broken build.
-            echo "=== Building ==="
-            rm -rf .next
-            npm run build
-
-            echo "=== Restarting ==="
-            pm2 restart kadryza-docs
-            
-            echo "=== Cleanup ==="
-            rm -rf "$STAGING"
-            
-            echo "✅ Deploy complete!"
+            set -euo pipefail
+            chmod +x /opt/kadryza/bin/deploy-frontend.sh
+            /opt/kadryza/bin/deploy-frontend.sh kadryza-docs /tmp/kadryza-docs-deploy kadryza-docs 3001

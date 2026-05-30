@@ -22,6 +22,12 @@ on:
       - 'sqlc.yaml'
       - '.github/workflows/backend.yml'
 
+# Serialize backend deploys (queue, never cancel an in-flight migration/swap).
+# The on-VPS flock additionally serializes against any manual deploy.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -124,6 +130,12 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
+
+            # Serialize against any other deploy (CI or manual) on a host-wide lock.
+            exec 9>/opt/kadryza/.deploy-backend.lock
+            echo "=== Acquiring backend deploy lock ==="
+            flock 9
+
             STAGING=/tmp/kadryza-backend-deploy
             DEST=/opt/kadryza/kadryza-server
             DB_CONTAINER=kadryza-postgres
