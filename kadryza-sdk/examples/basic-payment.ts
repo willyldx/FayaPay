@@ -40,12 +40,12 @@ async function main() {
 
     // 3. List recent transactions
     const list = await kadryza.transactions.list({
-      page: 1,
-      per_page: 5,
+      limit: 5,
+      offset: 0,
       status: 'SUCCESS',
     })
     console.log(`\n📋 ${list.total} successful transactions found`)
-    for (const tx of list.data) {
+    for (const tx of list.transactions) {
       console.log(`   - ${tx.reference}: ${tx.amount} ${tx.currency}`)
     }
   } catch (error) {

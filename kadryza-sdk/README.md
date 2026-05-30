@@ -79,16 +79,45 @@ console.log(transaction.status)
 
 ```typescript
 const result = await kadryza.transactions.list({
-  page: 1,
-  per_page: 20,
+  limit: 20,            // Optionnel — nombre max (défaut 20)
+  offset: 0,            // Optionnel — pagination (défaut 0)
   status: 'SUCCESS',    // Optionnel — filtrer par statut
-  operator: 'AIRTEL',   // Optionnel — filtrer par opérateur
-  from: '2024-01-01',   // Optionnel — date de début
-  to: '2024-01-31',     // Optionnel — date de fin
 })
 
-console.log(result.data)   // Transaction[]
-console.log(result.total)  // Nombre total de résultats
+console.log(result.transactions) // Transaction[]
+console.log(result.total)        // Nombre total de résultats
+```
+
+---
+
+### Gérer les webhooks
+
+```typescript
+// Créer un endpoint — le `secret` n'est affiché qu'UNE fois
+const endpoint = await kadryza.webhooks.create({
+  url: 'https://maboutique.td/webhooks/kadryza',
+})
+console.log(endpoint.secret) // À stocker de façon sécurisée
+
+// Lister / tester / supprimer
+const endpoints = await kadryza.webhooks.list()
+await kadryza.webhooks.test(endpoint.id)
+await kadryza.webhooks.delete(endpoint.id)
+```
+
+### Mode test (Sandbox)
+
+Utilise une clé `kadryza_test_…` : les transactions sont résolues
+automatiquement sans gateway ni argent réel. L'issue dépend du numéro :
+
+```typescript
+const kadryza = new Kadryza({ apiKey: 'kadryza_test_xxx' })
+
+// numéro contenant 0001 → FAILED · 0002 → TIMEOUT · autre → SUCCESS
+await kadryza.transactions.initiate({
+  reference: 'test_1', amount: 1000, currency: 'XAF',
+  operator: 'AIRTEL', phone_number: '+23566000002', // → TIMEOUT
+})
 ```
 
 ---

@@ -1,6 +1,6 @@
 {
   "name": "@kadryza/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official Kadryza SDK for Node.js — integrate mobile money payments in minutes",
   "author": "Kadryza",
   "license": "MIT",

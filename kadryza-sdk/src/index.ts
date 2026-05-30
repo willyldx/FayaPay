@@ -15,6 +15,10 @@ export type {
   WebhookEventData,
   WebhookEventType,
   VerifyWebhookParams,
+  CreateWebhookParams,
+  WebhookEndpoint,
+  CreatedWebhookEndpoint,
+  WebhookTestResult,
 } from './types'
 
 // ─── Named exports: error classes ───────────────────────────────────

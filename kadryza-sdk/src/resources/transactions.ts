@@ -59,19 +59,16 @@ export class Transactions {
   }
 
   /**
-   * List transactions with optional filters and pagination.
+   * List transactions with optional status filter and limit/offset pagination.
    *
-   * @param params - Optional filters: status, operator, date range, pagination
+   * @param params - Optional `limit`, `offset`, and `status` filter
    */
   async list(params: TransactionListParams = {}): Promise<PaginatedTransactions> {
     const query: Record<string, string> = {}
 
-    if (params.page !== undefined) query['page'] = String(params.page)
-    if (params.per_page !== undefined) query['per_page'] = String(params.per_page)
+    if (params.limit !== undefined) query['limit'] = String(params.limit)
+    if (params.offset !== undefined) query['offset'] = String(params.offset)
     if (params.status !== undefined) query['status'] = params.status
-    if (params.operator !== undefined) query['operator'] = params.operator
-    if (params.from !== undefined) query['from'] = params.from
-    if (params.to !== undefined) query['to'] = params.to
 
     return this.request<PaginatedTransactions>('GET', '/v1/transactions', { query })
   }

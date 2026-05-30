@@ -77,29 +77,23 @@ export interface Transaction {
 // ─── Pagination ─────────────────────────────────────────────────────
 
 export interface TransactionListParams {
-  /** Page number (1-indexed) */
-  page?: number
-  /** Number of items per page */
-  per_page?: number
+  /** Max number of transactions to return (default 20) */
+  limit?: number
+  /** Number of transactions to skip — for pagination (default 0) */
+  offset?: number
   /** Filter by transaction status */
   status?: TransactionStatus
-  /** Filter by operator */
-  operator?: OperatorType
-  /** Filter start date (ISO 8601 or YYYY-MM-DD) */
-  from?: string
-  /** Filter end date (ISO 8601 or YYYY-MM-DD) */
-  to?: string
 }
 
 export interface PaginatedTransactions {
-  /** Array of transactions for the current page */
-  data: Transaction[]
+  /** Transactions for this page */
+  transactions: Transaction[]
   /** Total number of matching transactions */
   total: number
-  /** Current page number */
-  page: number
-  /** Items per page */
-  per_page: number
+  /** The `limit` that was applied */
+  limit: number
+  /** The `offset` that was applied */
+  offset: number
 }
 
 // ─── Webhooks ───────────────────────────────────────────────────────
@@ -146,5 +140,39 @@ export interface VerifyWebhookParams {
   signature: string | undefined
   /** Your webhook secret from the Kadryza dashboard */
   secret: string
+}
+
+// ─── Webhook endpoint management ─────────────────────────────────────
+
+export interface CreateWebhookParams {
+  /** HTTPS URL that will receive webhook POST requests */
+  url: string
+}
+
+/** A registered webhook endpoint (secret is never returned after creation). */
+export interface WebhookEndpoint {
+  /** UUID of the endpoint */
+  id: string
+  /** Destination URL */
+  url: string
+  /** Whether the endpoint is active */
+  is_active: boolean
+  /** ISO 8601 creation timestamp */
+  created_at: string
+}
+
+/**
+ * Returned once when creating an endpoint. The `secret` is shown ONLY here —
+ * store it securely; it cannot be retrieved again.
+ */
+export interface CreatedWebhookEndpoint extends WebhookEndpoint {
+  /** HMAC signing secret — shown only at creation. Use it with `webhooks.verify`. */
+  secret: string
+}
+
+/** Result of triggering a test delivery. */
+export interface WebhookTestResult {
+  status: string
+  message: string
 }
 

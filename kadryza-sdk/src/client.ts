@@ -13,7 +13,7 @@ import { Transactions } from './resources/transactions'
 import { Webhooks } from './resources/webhooks'
 
 /** SDK version — injected in request headers */
-const SDK_VERSION = '0.1.0'
+const SDK_VERSION = '0.2.0'
 
 /** Default configuration values */
 const DEFAULTS = {
@@ -21,9 +21,12 @@ const DEFAULTS = {
   timeout: 30_000,
 } as const
 
+/** HTTP methods the SDK issues against the API-key surface. */
+export type HttpMethod = 'GET' | 'POST' | 'DELETE'
+
 /** Signature for the internal request function injected into resources */
 export type RequestFn = <T>(
-  method: 'GET' | 'POST',
+  method: HttpMethod,
   path: string,
   options?: { body?: unknown; query?: Record<string, string> }
 ) => Promise<T>
@@ -95,7 +98,7 @@ export default class Kadryza {
     // Bind the request method and inject into resources
     const boundRequest: RequestFn = this.#request.bind(this)
     this.transactions = new Transactions(boundRequest)
-    this.webhooks = new Webhooks()
+    this.webhooks = new Webhooks(boundRequest)
   }
 
   /**
@@ -106,7 +109,7 @@ export default class Kadryza {
    * @internal
    */
   async #request<T>(
-    method: 'GET' | 'POST',
+    method: HttpMethod,
     path: string,
     options?: { body?: unknown; query?: Record<string, string> }
   ): Promise<T> {
@@ -142,10 +145,15 @@ export default class Kadryza {
 
       // Success path
       if (response.ok) {
-        // [H2 FIX] Catch JSON parse errors separately from network errors
-        let json: { data: T }
+        // 204 No Content (e.g. DELETE) — nothing to parse.
+        if (response.status === 204) {
+          return undefined as T
+        }
+        // The Kadryza API returns the resource directly (no { data } envelope).
+        // [H2 FIX] Catch JSON parse errors separately from network errors.
+        let json: T
         try {
-          json = (await response.json()) as { data: T }
+          json = (await response.json()) as T
         } catch {
           throw new KadryzaError(
             `API returned status ${response.status} but response body is not valid JSON`,
@@ -153,7 +161,7 @@ export default class Kadryza {
             response.status
           )
         }
-        return json.data
+        return json
       }
 
       // Error path — parse error body and throw typed error
@@ -194,11 +202,8 @@ export default class Kadryza {
       return (await response.json()) as ApiErrorResponse
     } catch {
       return {
-        success: false,
-        error: {
-          code: 'UNKNOWN',
-          message: response.statusText || 'Unknown error',
-        },
+        error: response.statusText || 'Unknown error',
+        code: 'UNKNOWN',
       }
     }
   }
@@ -210,8 +215,9 @@ export default class Kadryza {
     status: number,
     body: ApiErrorResponse
   ): KadryzaError {
-    // [H1 FIX] Defensive access — API may return any JSON shape
-    const message = body?.error?.message ?? `Request failed with status ${status}`
+    // [H1 FIX] Defensive access — API may return any JSON shape.
+    // The API uses a flat error body: { error: "message", code: "CODE", ... }
+    const message = body?.error ?? `Request failed with status ${status}`
 
     switch (status) {
       case 401:
@@ -221,19 +227,17 @@ export default class Kadryza {
         return new KadryzaNotFoundError(message)
 
       case 409:
-        return new KadryzaDuplicateError(
-          message,
-          body?.error?.existing_transaction
-        )
+        return new KadryzaDuplicateError(message, body?.existing_transaction)
 
+      case 400:
       case 422:
-        return new KadryzaValidationError(message, body?.error?.fields)
+        return new KadryzaValidationError(message, body?.fields)
 
       case 503:
         return new KadryzaGatewayUnavailableError(message)
 
       default:
-        return new KadryzaError(message, body?.error?.code ?? 'UNKNOWN', status)
+        return new KadryzaError(message, body?.code ?? 'UNKNOWN', status)
     }
   }
 
