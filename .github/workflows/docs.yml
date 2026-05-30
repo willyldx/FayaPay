@@ -84,9 +84,11 @@ jobs:
             cd "$DEPLOY_DIR"
             npm install
 
+            # rm -rf .next avoids stale route-type errors when routes change.
             # No '| tail' so a build failure fails the job (set -e) instead of
             # silently restarting pm2 on a broken build.
             echo "=== Building ==="
+            rm -rf .next
             npm run build
 
             echo "=== Restarting ==="

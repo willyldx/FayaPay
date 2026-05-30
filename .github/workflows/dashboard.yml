@@ -86,9 +86,11 @@ jobs:
             npm install
 
             # Build using the VPS .env.local for NEXT_PUBLIC_* (correct domain).
+            # rm -rf .next avoids stale route-type errors when routes change.
             # No '| tail' so a build failure actually fails the job (set -e) and we
             # never restart pm2 on a broken/missing .next build.
             echo "=== Building ==="
+            rm -rf .next
             npm run build
 
             echo "=== Restarting ==="
