@@ -80,10 +80,10 @@ export function resetPassword(token: string, password: string): Promise<{ messag
 /**
  * Vérifie l'email du merchant via le token reçu par mail.
  *
- * GET /v1/auth/verify-email/:token
+ * GET /v1/auth/verify/:token
  */
 export function verifyEmail(token: string): Promise<{ message: string }> {
-  return apiClient.get<{ message: string }>(`/auth/verify-email/${token}`)
+  return apiClient.get<{ message: string }>(`/auth/verify/${token}`)
 }
 
 /**

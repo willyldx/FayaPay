@@ -96,7 +96,7 @@ func formatXAF(amount int64) string {
 
 // SendVerificationEmail — confirm the email address (link-based).
 func (s *EmailService) SendVerificationEmail(email, token, name string) error {
-	url := fmt.Sprintf("%s/verify-email?token=%s", s.config.AppURL, token)
+	url := fmt.Sprintf("%s/verify/%s", s.config.AppURL, token)
 	return s.sendContent(email, emailContent{
 		Subject: "Vérifiez votre adresse email — Kadryza",
 		Preview: "Confirmez votre adresse pour activer votre compte Kadryza.",
@@ -132,7 +132,7 @@ func (s *EmailService) SendWelcomeEmail(email, name string) error {
 
 // SendPasswordResetEmail — reset link.
 func (s *EmailService) SendPasswordResetEmail(email, token, name string) error {
-	url := fmt.Sprintf("%s/reset-password?token=%s", s.config.AppURL, token)
+	url := fmt.Sprintf("%s/reset-password/%s", s.config.AppURL, token)
 	return s.sendContent(email, emailContent{
 		Subject: "Réinitialisation de votre mot de passe — Kadryza",
 		Preview: "Définissez un nouveau mot de passe pour votre compte Kadryza.",
