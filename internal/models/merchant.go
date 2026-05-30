@@ -23,14 +23,15 @@ type Merchant struct {
 // MerchantPublic is the safe representation of a Merchant for API responses.
 // Excludes all sensitive fields (password hash, API key hash).
 type MerchantPublic struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	Email         string    `json:"email"`
-	APIKeyPrefix  *string   `json:"api_key_prefix,omitempty"`
-	IsActive      bool      `json:"is_active"`
-	EmailVerified bool      `json:"email_verified"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	Email            string    `json:"email"`
+	APIKeyPrefix     *string   `json:"api_key_prefix,omitempty"`
+	TestAPIKeyPrefix *string   `json:"test_api_key_prefix,omitempty"`
+	IsActive         bool      `json:"is_active"`
+	EmailVerified    bool      `json:"email_verified"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // ToPublic converts a Merchant to its safe API representation.

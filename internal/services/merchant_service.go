@@ -440,6 +440,50 @@ func (s *MerchantService) AuthenticateByAPIKey(ctx context.Context, rawKey strin
 	return &merchant, nil
 }
 
+// AuthenticateByTestAPIKey validates a raw test (sandbox) API key.
+func (s *MerchantService) AuthenticateByTestAPIKey(ctx context.Context, rawKey string) (*db.Merchant, error) {
+	keyHash := crypto.HashAPIKey(rawKey)
+
+	merchant, err := s.queries.GetMerchantByTestAPIKeyHash(ctx, &keyHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, fmt.Errorf("querying merchant by test API key: %w", err)
+	}
+
+	if merchant.IsActive != nil && !*merchant.IsActive {
+		return nil, ErrMerchantInactive
+	}
+
+	return &merchant, nil
+}
+
+// GenerateTestAPIKey creates (or rotates) the merchant's sandbox API key.
+// Returned ONCE; only the hash is stored.
+func (s *MerchantService) GenerateTestAPIKey(ctx context.Context, merchantID uuid.UUID) (*models.APIKeyResponse, error) {
+	rawKey, prefix, err := crypto.GenerateTestAPIKey()
+	if err != nil {
+		return nil, fmt.Errorf("generating test API key: %w", err)
+	}
+	keyHash := crypto.HashAPIKey(rawKey)
+
+	if _, err := s.queries.UpdateMerchantTestAPIKey(ctx, db.UpdateMerchantTestAPIKeyParams{
+		ID:               merchantID,
+		TestApiKeyHash:   &keyHash,
+		TestApiKeyPrefix: &prefix,
+	}); err != nil {
+		return nil, fmt.Errorf("storing test API key hash: %w", err)
+	}
+
+	s.logger.Info("test API key generated", zap.String("merchant_id", merchantID.String()))
+	return &models.APIKeyResponse{
+		APIKey:    rawKey,
+		Prefix:    prefix,
+		CreatedAt: time.Now(),
+	}, nil
+}
+
 // =============================================================================
 // JWT helpers
 // =============================================================================
@@ -478,14 +522,15 @@ func toMerchantPublic(m db.Merchant) models.MerchantPublic {
 		emailVerified = *m.EmailVerified
 	}
 	return models.MerchantPublic{
-		ID:            m.ID,
-		Name:          m.Name,
-		Email:         m.Email,
-		APIKeyPrefix:  m.ApiKeyPrefix,
-		IsActive:      m.IsActive != nil && *m.IsActive,
-		EmailVerified: emailVerified,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
+		ID:               m.ID,
+		Name:             m.Name,
+		Email:            m.Email,
+		APIKeyPrefix:     m.ApiKeyPrefix,
+		TestAPIKeyPrefix: m.TestApiKeyPrefix,
+		IsActive:         m.IsActive != nil && *m.IsActive,
+		EmailVerified:    emailVerified,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
 	}
 }
 

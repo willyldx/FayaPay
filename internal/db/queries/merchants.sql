@@ -31,6 +31,18 @@ SET api_key_hash  = $2,
 WHERE id = $1
 RETURNING *;
 
+-- name: GetMerchantByTestAPIKeyHash :one
+SELECT * FROM merchants
+WHERE test_api_key_hash = $1 AND is_active = true;
+
+-- name: UpdateMerchantTestAPIKey :one
+UPDATE merchants
+SET test_api_key_hash   = $2,
+    test_api_key_prefix = $3,
+    updated_at          = NOW()
+WHERE id = $1
+RETURNING *;
+
 -- name: RevokeAPIKey :exec
 UPDATE merchants
 SET api_key_hash  = NULL,

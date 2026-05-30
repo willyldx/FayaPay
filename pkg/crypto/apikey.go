@@ -9,8 +9,11 @@ import (
 )
 
 const (
-	// APIKeyPrefix is prepended to every generated API key for identification.
+	// APIKeyPrefix is prepended to every generated live API key.
 	APIKeyPrefix = "kadryza_live_"
+
+	// TestAPIKeyPrefix is prepended to sandbox/test API keys.
+	TestAPIKeyPrefix = "kadryza_test_"
 
 	// keyLength is the number of random characters after the prefix.
 	keyLength = 32
@@ -19,15 +22,22 @@ const (
 	charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
-// GenerateAPIKey creates a new API key in the format: kadryza_live_<32 random chars>.
+// GenerateAPIKey creates a new live API key (kadryza_live_<32 random chars>).
 // The returned key should be shown to the merchant ONCE and never stored in plaintext.
-// Only its SHA-256 hash is persisted in the database.
 func GenerateAPIKey() (key string, prefix string, err error) {
+	return generateKey(APIKeyPrefix)
+}
+
+// GenerateTestAPIKey creates a new sandbox API key (kadryza_test_<32 random chars>).
+func GenerateTestAPIKey() (key string, prefix string, err error) {
+	return generateKey(TestAPIKeyPrefix)
+}
+
+// generateKey produces a random API key with the given prefix.
+func generateKey(keyPrefix string) (key string, prefix string, err error) {
 	buf := make([]byte, keyLength)
 
 	// FIX L5: Rejection sampling eliminates modulo bias.
-	// The old code (buf[i] % 62) biased the first 8 charset characters by ~3.1%.
-	// We reject random bytes >= 248 (largest multiple of 62 ≤ 256).
 	charsetLen := byte(len(charset))
 	maxUnbiased := byte(256 - (256 % int(charsetLen))) // 248
 	for i := 0; i < keyLength; i++ {
@@ -44,8 +54,8 @@ func GenerateAPIKey() (key string, prefix string, err error) {
 		}
 	}
 
-	fullKey := APIKeyPrefix + string(buf)
-	return fullKey, APIKeyPrefix, nil
+	fullKey := keyPrefix + string(buf)
+	return fullKey, keyPrefix, nil
 }
 
 // HashAPIKey computes the SHA-256 hash of an API key for secure storage.

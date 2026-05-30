@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,6 +78,9 @@ func (s *TransactionService) notifyPaymentReceived(txID uuid.UUID) {
 		if err != nil {
 			return
 		}
+		if txn.IsTest != nil && *txn.IsTest {
+			return // no real-money notification for sandbox transactions
+		}
 		merchant, err := s.queries.GetMerchantByID(ctx, txn.MerchantID)
 		if err != nil {
 			return
@@ -93,6 +97,9 @@ func (s *TransactionService) creditLedgerForPayment(ctx context.Context, txID uu
 	if err != nil {
 		s.logger.Error("ledger: fetch transaction failed", zap.String("transaction_id", txID.String()), zap.Error(err))
 		return
+	}
+	if txn.IsTest != nil && *txn.IsTest {
+		return // sandbox transactions never affect the real balance
 	}
 	if exists, eerr := s.queries.LedgerPaymentExists(ctx, &txID); eerr == nil && exists {
 		return // already credited
@@ -141,6 +148,40 @@ func (s *TransactionService) creditLedgerForPayment(ctx context.Context, txID uu
 		zap.Int64("gross", gross),
 		zap.Int64("fee", fee),
 	)
+}
+
+// scheduleSandboxResolve auto-resolves a test transaction after a short delay,
+// based on magic phone-number patterns (no gateway involved).
+func (s *TransactionService) scheduleSandboxResolve(txn db.Transaction) {
+	go func() {
+		time.Sleep(2 * time.Second)
+		resolve, status := sandboxOutcome(txn.PhoneNumber)
+		if !resolve {
+			return // stays PENDING -> handled by the timeout worker
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if _, err := s.UpdateStatus(ctx, txn.ID, status, nil); err != nil {
+			s.logger.Warn("sandbox resolve failed",
+				zap.String("transaction_id", txn.ID.String()), zap.Error(err))
+		}
+	}()
+}
+
+// sandboxOutcome maps a phone number to a deterministic test outcome:
+//
+//	contains "0001" -> FAILED
+//	contains "0002" -> stays PENDING (will TIMEOUT)
+//	otherwise       -> SUCCESS
+func sandboxOutcome(phone string) (resolve bool, status models.TransactionStatus) {
+	switch {
+	case strings.Contains(phone, "0001"):
+		return true, models.StatusFailed
+	case strings.Contains(phone, "0002"):
+		return false, ""
+	default:
+		return true, models.StatusSuccess
+	}
 }
 
 // =============================================================================
@@ -211,6 +252,7 @@ func (s *TransactionService) Initiate(
 		PhoneNumber:   req.PhoneNumber,
 		Description:   description,
 		PaymentLinkID: req.PaymentLinkID,
+		IsTest:        &req.IsTest,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -240,15 +282,20 @@ func (s *TransactionService) Initiate(
 		return nil, fmt.Errorf("committing: %w", err)
 	}
 
-	// --- Dispatch to gateway via WebSocket Hub ---
-	// This is async — if no gateway is available, the transaction stays PENDING
-	// and will eventually timeout via the timeout worker.
-	// FIX M6: Add context timeout to prevent goroutine leak if Hub blocks.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		s.dispatchToGateway(ctx, txn)
-	}()
+	// --- Test mode (sandbox): never touch the gateway; auto-resolve instead ---
+	if req.IsTest {
+		s.scheduleSandboxResolve(txn)
+	} else {
+		// --- Dispatch to gateway via WebSocket Hub ---
+		// This is async — if no gateway is available, the transaction stays PENDING
+		// and will eventually timeout via the timeout worker.
+		// FIX M6: Add context timeout to prevent goroutine leak if Hub blocks.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			s.dispatchToGateway(ctx, txn)
+		}()
+	}
 
 	s.logger.Info("transaction initiated",
 		zap.String("transaction_id", txn.ID.String()),

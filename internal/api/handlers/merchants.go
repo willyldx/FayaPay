@@ -143,6 +143,21 @@ func (h *MerchantHandler) GenerateAPIKey(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(resp)
 }
 
+// GenerateTestAPIKey handles POST /v1/auth/api-keys/test
+func (h *MerchantHandler) GenerateTestAPIKey(c *fiber.Ctx) error {
+	merchantID, ok := middleware.GetMerchantID(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication required", "code": "AUTH_REQUIRED"})
+	}
+
+	resp, err := h.service.GenerateTestAPIKey(c.Context(), merchantID)
+	if err != nil {
+		h.logger.Error("generate test API key failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate test API key", "code": "INTERNAL_ERROR"})
+	}
+	return c.Status(fiber.StatusCreated).JSON(resp)
+}
+
 // ListAPIKeys handles GET /v1/auth/api-keys
 func (h *MerchantHandler) ListAPIKeys(c *fiber.Ctx) error {
 	merchantID, ok := middleware.GetMerchantID(c)
@@ -162,15 +177,22 @@ func (h *MerchantHandler) ListAPIKeys(c *fiber.Ctx) error {
 		})
 	}
 
-	var keys []map[string]interface{}
+	keys := make([]map[string]interface{}, 0, 2)
 	if merchant.APIKeyPrefix != nil {
 		keys = append(keys, map[string]interface{}{
 			"id":         merchant.ID.String(),
 			"prefix":     *merchant.APIKeyPrefix,
+			"is_test":    false,
 			"created_at": merchant.UpdatedAt,
 		})
-	} else {
-		keys = make([]map[string]interface{}, 0)
+	}
+	if merchant.TestAPIKeyPrefix != nil {
+		keys = append(keys, map[string]interface{}{
+			"id":         merchant.ID.String() + "-test",
+			"prefix":     *merchant.TestAPIKeyPrefix,
+			"is_test":    true,
+			"created_at": merchant.UpdatedAt,
+		})
 	}
 
 	return c.JSON(keys)

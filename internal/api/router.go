@@ -125,6 +125,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	authProtected := auth.Group("", middleware.JWTAuth(deps.Config.JWTSecret))
 	authProtected.Get("/api-keys", merchantHandler.ListAPIKeys)
 	authProtected.Post("/api-keys", merchantHandler.GenerateAPIKey)
+	authProtected.Post("/api-keys/test", merchantHandler.GenerateTestAPIKey)
 	authProtected.Delete("/api-keys/:id", merchantHandler.RevokeAPIKey)
 	authProtected.Get("/me", merchantHandler.GetProfile)
 	authProtected.Patch("/change-password", merchantHandler.ChangePassword)

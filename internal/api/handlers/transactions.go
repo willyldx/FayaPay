@@ -44,6 +44,9 @@ func (h *TransactionHandler) Initiate(c *fiber.Ctx) error {
 		})
 	}
 
+	// Sandbox flag comes from the authenticating API key (test vs live).
+	req.IsTest = middleware.GetIsTest(c)
+
 	resp, err := h.service.Initiate(c.Context(), merchantID, req)
 	if err != nil {
 		if errors.Is(err, services.ErrDuplicateReference) {

@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	db "github.com/kadryza/kadryza-backend/internal/db/sqlc"
 	"github.com/kadryza/kadryza-backend/internal/services"
 	"github.com/kadryza/kadryza-backend/pkg/crypto"
 )
@@ -16,7 +17,14 @@ import (
 const (
 	LocalMerchantID = "merchant_id"
 	LocalMerchant   = "merchant"
+	LocalIsTest     = "is_test"
 )
+
+// GetIsTest reports whether the request was authenticated with a test API key.
+func GetIsTest(c *fiber.Ctx) bool {
+	v, _ := c.Locals(LocalIsTest).(bool)
+	return v
+}
 
 // JWTAuth validates a Bearer JWT token from the Authorization header.
 // Used for merchant dashboard routes (register, login, API key management).
@@ -93,16 +101,25 @@ func APIKeyAuth(merchantSvc *services.MerchantService) fiber.Handler {
 			})
 		}
 
-		// Validate key format — use the shared constant from pkg/crypto.
-		if !strings.HasPrefix(apiKey, crypto.APIKeyPrefix) {
+		// A key is either live (kadryza_live_) or test/sandbox (kadryza_test_).
+		isTest := strings.HasPrefix(apiKey, crypto.TestAPIKeyPrefix)
+		if !isTest && !strings.HasPrefix(apiKey, crypto.APIKeyPrefix) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "invalid API key format",
 				"code":  "API_KEY_INVALID_FORMAT",
 			})
 		}
 
-		// Authenticate: hash the key and look up the merchant.
-		merchant, err := merchantSvc.AuthenticateByAPIKey(c.Context(), apiKey)
+		// Authenticate against the matching key (live vs test).
+		var (
+			merchant *db.Merchant
+			err      error
+		)
+		if isTest {
+			merchant, err = merchantSvc.AuthenticateByTestAPIKey(c.Context(), apiKey)
+		} else {
+			merchant, err = merchantSvc.AuthenticateByAPIKey(c.Context(), apiKey)
+		}
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "invalid or revoked API key",
@@ -110,10 +127,9 @@ func APIKeyAuth(merchantSvc *services.MerchantService) fiber.Handler {
 			})
 		}
 
-		// Store merchant ID and full merchant in locals.
 		c.Locals(LocalMerchantID, merchant.ID)
 		c.Locals(LocalMerchant, merchant)
-
+		c.Locals(LocalIsTest, isTest)
 		return c.Next()
 	}
 }

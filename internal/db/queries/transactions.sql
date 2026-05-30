@@ -5,9 +5,9 @@
 -- name: CreateTransaction :one
 INSERT INTO transactions (
     merchant_id, reference, internal_ref, amount, currency,
-    operator, phone_number, description, payment_link_id
+    operator, phone_number, description, payment_link_id, is_test
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: GetTransactionByID :one

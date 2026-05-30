@@ -130,6 +130,9 @@ type CreateTransactionRequest struct {
 	// PaymentLinkID is set internally when a transaction originates from a
 	// hosted-checkout payment link. Never populated from the public JSON body.
 	PaymentLinkID *uuid.UUID `json:"-"`
+
+	// IsTest is set internally from the authenticating API key (sandbox key).
+	IsTest bool `json:"-"`
 }
 
 // Validate performs business rule validation beyond struct tags.
