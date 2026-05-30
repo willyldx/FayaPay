@@ -185,7 +185,7 @@ func (h *PaymentLinkHandler) Pay(c *fiber.Ctx) error {
 	txReq := models.CreateTransactionRequest{
 		Reference:     "chk_" + uuid.New().String(),
 		Amount:        link.Amount,
-		Currency:      models.CurrencyType(link.Currency),
+		Currency:      models.CurrencyType("XAF"),
 		Operator:      models.OperatorType(strings.ToUpper(strings.TrimSpace(req.Operator))),
 		PhoneNumber:   strings.TrimSpace(req.PhoneNumber),
 		PaymentLinkID: &link.ID,

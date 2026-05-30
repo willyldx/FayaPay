@@ -222,7 +222,7 @@ func (s *PaymentLinkService) GetCheckoutView(ctx context.Context, slug string) (
 	return &models.CheckoutView{
 		Slug:         link.Slug,
 		Amount:       link.Amount,
-		Currency:     link.Currency,
+		Currency:     fmt.Sprint(link.Currency),
 		Description:  link.Description,
 		MerchantName: merchant.Name,
 		IsPayable:    s.isPayable(link),
@@ -302,7 +302,7 @@ func (s *PaymentLinkService) toPublic(l db.PaymentLink) models.PaymentLinkPublic
 		ID:          l.ID,
 		Slug:        l.Slug,
 		Amount:      l.Amount,
-		Currency:    l.Currency,
+		Currency:    fmt.Sprint(l.Currency),
 		Description: l.Description,
 		IsActive:    l.IsActive != nil && *l.IsActive,
 		IsReusable:  l.IsReusable != nil && *l.IsReusable,
