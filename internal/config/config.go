@@ -46,6 +46,12 @@ type Config struct {
 
 	// App URL — used in email templates for links
 	AppURL string `mapstructure:"APP_URL"`
+
+	// KYC — root directory where uploaded KYC documents are stored on disk.
+	KYCUploadDir string `mapstructure:"KYC_UPLOAD_DIR"`
+
+	// KYC — maximum accepted upload size in bytes.
+	KYCMaxUploadBytes int64 `mapstructure:"KYC_MAX_UPLOAD_BYTES"`
 }
 
 // IsProd returns true if the environment is set to production.
@@ -68,6 +74,8 @@ func Load() (*Config, error) {
 	v.SetDefault("SMTP_PORT", 587)
 	v.SetDefault("SMTP_FROM", "noreply@spencerai.tech")
 	v.SetDefault("APP_URL", "http://localhost:3000")
+	v.SetDefault("KYC_UPLOAD_DIR", "./uploads/kyc")
+	v.SetDefault("KYC_MAX_UPLOAD_BYTES", 10*1024*1024) // 10 MB
 
 	// --- .env file ---
 	v.SetConfigFile(".env")
@@ -104,6 +112,8 @@ func Load() (*Config, error) {
 	cfg.SMTPPassword = v.GetString("SMTP_PASSWORD")
 	cfg.SMTPFrom = v.GetString("SMTP_FROM")
 	cfg.AppURL = v.GetString("APP_URL")
+	cfg.KYCUploadDir = v.GetString("KYC_UPLOAD_DIR")
+	cfg.KYCMaxUploadBytes = v.GetInt64("KYC_MAX_UPLOAD_BYTES")
 
 	// Parse JWT expiry as a duration string (e.g. "24h", "30m").
 	expiryStr := v.GetString("JWT_EXPIRY")

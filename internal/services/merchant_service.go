@@ -529,6 +529,7 @@ func toMerchantPublic(m db.Merchant) models.MerchantPublic {
 		TestAPIKeyPrefix: m.TestApiKeyPrefix,
 		IsActive:         m.IsActive != nil && *m.IsActive,
 		EmailVerified:    emailVerified,
+		KYCStatus:        m.KycStatus,
 		CreatedAt:        m.CreatedAt,
 		UpdatedAt:        m.UpdatedAt,
 	}

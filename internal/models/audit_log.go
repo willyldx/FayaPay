@@ -39,4 +39,9 @@ const (
 	AuditEventEmailVerified        = "EMAIL_VERIFIED"
 	AuditEventVerificationSent     = "VERIFICATION_EMAIL_SENT"
 	AuditEventPasswordReset        = "PASSWORD_RESET"
+	AuditEventKYCProfileUpdated    = "KYC_PROFILE_UPDATED"
+	AuditEventKYCDocumentUploaded  = "KYC_DOCUMENT_UPLOADED"
+	AuditEventKYCDocumentDeleted   = "KYC_DOCUMENT_DELETED"
+	AuditEventKYCSubmitted         = "KYC_SUBMITTED"
+	AuditEventKYCStatusChanged     = "KYC_STATUS_CHANGED"
 )

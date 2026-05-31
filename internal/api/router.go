@@ -89,6 +89,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	webhookSvc := services.NewWebhookService(deps.DB, deps.AsynqClient, deps.Config, deps.Logger)
 	paymentLinkSvc := services.NewPaymentLinkService(deps.DB, deps.Config, deps.Logger)
 	billingSvc := services.NewBillingService(deps.DB, deps.Hub, deps.Logger)
+	kycSvc := services.NewKYCService(deps.DB, deps.Config, deps.Logger)
 
 	// =========================================================================
 	// Initialize handlers
@@ -100,6 +101,7 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	gatewayHandler := handlers.NewGatewayHandler(deps.Hub, deps.Logger)
 	paymentLinkHandler := handlers.NewPaymentLinkHandler(paymentLinkSvc, transactionSvc, deps.Logger)
 	billingHandler := handlers.NewBillingHandler(billingSvc, deps.Logger)
+	kycHandler := handlers.NewKYCHandler(kycSvc, deps.Logger)
 
 	// =========================================================================
 	// API v1 routes
@@ -133,6 +135,17 @@ func SetupRouter(app *fiber.App, deps *Dependencies) {
 	// --- Merchant profile routes (JWT auth) — portail merchant ---
 	merchants := v1.Group("/merchants", middleware.JWTAuth(deps.Config.JWTSecret))
 	merchants.Patch("/profile", merchantHandler.UpdateProfile)
+
+	// --- KYC routes (JWT auth) — merchant verification flow ---
+	// NOTE: the back-office review endpoint (KYCService.SetStatus) is intentionally
+	// NOT mounted here — it must sit behind an admin guard, which does not yet exist.
+	kyc := v1.Group("/kyc", middleware.JWTAuth(deps.Config.JWTSecret))
+	kyc.Get("/status", kycHandler.GetStatus)
+	kyc.Patch("/profile", kycHandler.UpdateProfile)
+	kyc.Get("/documents", kycHandler.ListDocuments)
+	kyc.Post("/documents", kycHandler.UploadDocument)
+	kyc.Delete("/documents/:id", kycHandler.DeleteDocument)
+	kyc.Post("/submit", kycHandler.Submit)
 
 	// --- Balance & settlements (JWT auth) ---
 	balanceRoutes := v1.Group("/balance", middleware.JWTAuth(deps.Config.JWTSecret))

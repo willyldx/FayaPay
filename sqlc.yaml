@@ -120,6 +120,33 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+          # KYC: merchants uses SELECT */RETURNING * everywhere, so every
+          # genuinely-nullable KYC column must be a pointer or NULL scans break
+          # ALL merchant reads (login/register included).
+          - column: "merchants.business_type"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.legal_name"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.rccm"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.nif"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.contact_phone"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.address"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.kyc_rejection_reason"
+            go_type: { type: "string", pointer: true }
+          - column: "merchants.kyc_submitted_at"
+            go_type: { import: "time", type: "Time", pointer: true }
+          - column: "merchants.kyc_reviewed_at"
+            go_type: { import: "time", type: "Time", pointer: true }
+          - column: "kyc_documents.file_name"
+            go_type: { type: "string", pointer: true }
+          - column: "kyc_documents.mime_type"
+            go_type: { type: "string", pointer: true }
+          - column: "kyc_documents.size_bytes"
+            go_type: { type: "int64", pointer: true }
           - db_type: "text"
             nullable: true
             go_type: "string"

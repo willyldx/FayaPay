@@ -116,3 +116,40 @@ SET name       = $2,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- =============================================================================
+-- KYC queries
+-- =============================================================================
+
+-- name: UpdateMerchantKYCProfile :one
+UPDATE merchants
+SET business_type = COALESCE(sqlc.narg('business_type'), business_type),
+    legal_name    = COALESCE(sqlc.narg('legal_name'), legal_name),
+    rccm          = COALESCE(sqlc.narg('rccm'), rccm),
+    nif           = COALESCE(sqlc.narg('nif'), nif),
+    contact_phone = COALESCE(sqlc.narg('contact_phone'), contact_phone),
+    address       = COALESCE(sqlc.narg('address'), address),
+    updated_at    = NOW()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: SubmitKYC :one
+-- Moves the merchant into review. Allowed only from 'unverified' or 'rejected'.
+UPDATE merchants
+SET kyc_status           = 'pending',
+    kyc_submitted_at     = NOW(),
+    kyc_rejection_reason = NULL,
+    updated_at           = NOW()
+WHERE id = $1
+  AND kyc_status IN ('unverified', 'rejected')
+RETURNING *;
+
+-- name: SetKYCStatus :one
+-- Admin/back-office review outcome (verified | rejected | pending | unverified).
+UPDATE merchants
+SET kyc_status           = sqlc.arg('kyc_status'),
+    kyc_rejection_reason = sqlc.narg('kyc_rejection_reason'),
+    kyc_reviewed_at      = NOW(),
+    updated_at           = NOW()
+WHERE id = sqlc.arg('id')
+RETURNING *;

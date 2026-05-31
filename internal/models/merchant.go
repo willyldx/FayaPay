@@ -30,6 +30,7 @@ type MerchantPublic struct {
 	TestAPIKeyPrefix *string   `json:"test_api_key_prefix,omitempty"`
 	IsActive         bool      `json:"is_active"`
 	EmailVerified    bool      `json:"email_verified"`
+	KYCStatus        string    `json:"kyc_status"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
