@@ -17,7 +17,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  HelpCircle
+  HelpCircle,
+  ShieldCheck
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -38,6 +39,7 @@ const navigation = [
   { name: "Clés API", href: "/api-keys", icon: Key },
   { name: "Webhooks", href: "/webhooks", icon: Webhook },
   { name: "Liens de paiement", href: "/payment-links", icon: Link2 },
+  { name: "Vérification (KYC)", href: "/kyc", icon: ShieldCheck },
   { name: "Paramètres", href: "/settings", icon: Settings },
   { name: "Support", href: "/support", icon: HelpCircle },
 ]

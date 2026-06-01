@@ -305,6 +305,65 @@ export interface GatewayStatus {
 }
 
 // -----------------------------------------------------------------------------
+// KYC — Vérification d'identité marchand (interne manuel)
+// -----------------------------------------------------------------------------
+
+/** Statut de vérification KYC du marchand */
+export type KYCStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
+
+/** Type d'entité business */
+export type BusinessType = 'individual' | 'company'
+
+/** Types de documents KYC acceptés à l'upload */
+export type KYCDocumentType =
+  | 'ID_CARD'
+  | 'PASSPORT'
+  | 'RCCM'
+  | 'NIF'
+  | 'PROOF_OF_ADDRESS'
+  | 'SELFIE'
+  | 'OTHER'
+
+/** Statut de revue d'un document uploadé */
+export type KYCDocumentStatus = 'pending' | 'approved' | 'rejected'
+
+/** Document KYC uploadé (vue publique — le chemin disque n'est jamais exposé) */
+export interface KYCDocument {
+  id: string
+  doc_type: KYCDocumentType
+  file_name?: string
+  mime_type?: string
+  size_bytes?: number
+  status: KYCDocumentStatus
+  uploaded_at: string         // ISO 8601
+}
+
+/** Vue agrégée du KYC retournée par GET /v1/kyc/status */
+export interface KYCStatusResponse {
+  status: KYCStatus
+  business_type?: BusinessType
+  legal_name?: string
+  rccm?: string
+  nif?: string
+  contact_phone?: string
+  address?: string
+  submitted_at?: string       // ISO 8601
+  reviewed_at?: string        // ISO 8601
+  rejection_reason?: string
+  documents: KYCDocument[]
+}
+
+/** Payload PATCH /v1/kyc/profile — sémantique PATCH (champs optionnels) */
+export interface UpdateKYCProfileRequest {
+  business_type?: BusinessType
+  legal_name?: string
+  rccm?: string
+  nif?: string
+  contact_phone?: string
+  address?: string
+}
+
+// -----------------------------------------------------------------------------
 // Utilitaires UI
 // -----------------------------------------------------------------------------
 
